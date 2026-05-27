@@ -34,8 +34,8 @@ class LidarStreamNode(Node):
         self._input_topic = self.get_parameter("input_topic").get_parameter_value().string_value
         self._publish_rate_hz = self.get_parameter("publish_rate_hz").get_parameter_value().double_value
 
-        self._clients: set = set()
-        self._clients_lock = threading.Lock()
+        self._ws_clients: set = set()
+        self._ws_clients_lock = threading.Lock()
         self._last_publish_time = 0.0
         self._min_interval = 1.0 / max(self._publish_rate_hz, 0.1)
 
@@ -72,8 +72,8 @@ class LidarStreamNode(Node):
         asyncio.run_coroutine_threadsafe(self._broadcast(full_msg), self._loop)
 
     async def _broadcast(self, message: bytes) -> None:
-        with self._clients_lock:
-            clients = set(self._clients)
+        with self._ws_clients_lock:
+            clients = set(self._ws_clients)
         if not clients:
             return
         dead = set()
@@ -83,12 +83,12 @@ class LidarStreamNode(Node):
             except ConnectionClosed:
                 dead.add(ws)
         if dead:
-            with self._clients_lock:
-                self._clients -= dead
+            with self._ws_clients_lock:
+                self._ws_clients -= dead
 
     async def _ws_handler(self, ws) -> None:
-        with self._clients_lock:
-            self._clients.add(ws)
+        with self._ws_clients_lock:
+            self._ws_clients.add(ws)
         remote = ws.remote_address
         self.get_logger().info(f"WebSocket client connected: {remote}")
         try:
@@ -99,8 +99,8 @@ class LidarStreamNode(Node):
         except ConnectionClosed:
             pass
         finally:
-            with self._clients_lock:
-                self._clients.discard(ws)
+            with self._ws_clients_lock:
+                self._ws_clients.discard(ws)
             self.get_logger().info(f"WebSocket client disconnected: {remote}")
 
     def _run_ws_server(self) -> None:
