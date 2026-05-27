@@ -1,0 +1,27 @@
+FROM arm64v8/ros:humble-ros-base
+
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    python3-pip \
+    python3-rosdep \
+    && rm -rf /var/lib/apt/lists/* \
+    && rosdep update
+
+WORKDIR /ros2_ws
+
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+COPY . src/spot_ros2_driver
+
+RUN source /opt/ros/humble/setup.bash && \
+    sudo rosdep install --from-paths src --ignore-src -r -y
+
+RUN source /opt/ros/humble/setup.bash && \
+    colcon build --symlink-install 
+
+ENTRYPOINT ["/bin/bash", "-c", "source /ros2_ws/install/setup.bash && /bin/bash"]
+CMD [ "/bin/bash" ]

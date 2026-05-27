@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    global_cloud:
+      map_frame_id: "map"
+      map_leaf_size: 0.1
+
+    terrain_cloud:
+      use_pmf: true
+      pmf_max_window_size: 5.0
+      pmf_slope: 0.8
+      pmf_initial_distance: 0.5
+      pmf_max_distance: 1.0
+      ceiling_height_threshold: 1.5

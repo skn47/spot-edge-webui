@@ -1,0 +1,94 @@
+# ==============================================================================
+# ROS 2 & C++ Build Artifacts (Massive resource drains)
+# ==============================================================================
+build/
+install/
+log/
+.catkin_tools/
+.colcon/
+*.o
+*.obj
+*.so
+*.a
+*.dylib
+*.dll
+*.exe
+
+# ==============================================================================
+# Robotics Data, Bags, & Large Datasets
+# ==============================================================================
+*.bag
+*.mcap
+*.db3
+*.pcd
+*.ply
+*.csv
+*.jsonl
+# Exclude folders containing recorded flight/drive test data
+data/
+recordings/
+
+# ==============================================================================
+# Node.js & Next.js Frontend
+# ==============================================================================
+node_modules/
+bower_components/
+.pnpm-store/
+.next/
+.nuxt/
+out/
+.cache/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ==============================================================================
+# Python Backend & Caches
+# ==============================================================================
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# ==============================================================================
+# IDEs & System Files
+# ==============================================================================
+.git/
+.svn/
+.hg/
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
+
+# ==============================================================================
+# Media, Assets, & Heavy Binary Files
+# ==============================================================================
+*.png
+*.jpg
+*.jpeg
+*.gif
+# *.svg
+*.ico
+*.mp4
+*.mov
+*.pdf
+*.zip
+*.tar.gz
+*.tgz
+*.log
+*.sqlite
+*.db
+
