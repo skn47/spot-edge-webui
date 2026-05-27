@@ -66,7 +66,7 @@ class LidarStreamNode(Node):
         payload = pack_xyz_binary(xyz)
 
         n_points = len(xyz)
-        header = b"PC" + struct.pack("<I", n_points)
+        header = b"PC\x00\x00" + struct.pack("<I", n_points)
         full_msg = header + payload
 
         asyncio.run_coroutine_threadsafe(self._broadcast(full_msg), self._loop)
