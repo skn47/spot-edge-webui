@@ -9,6 +9,7 @@ import {
   processAction,
   ProcessResponse,
 } from "@/lib/api";
+import { PROCESS_LABELS } from "@/lib/constants";
 import { useRobotState } from "@/hooks/useRobotState";
 import { useTeleop } from "@/hooks/useTeleop";
 
@@ -99,14 +100,6 @@ const S = {
 // Helper
 // ---------------------------------------------------------------------------
 
-const PROCESS_LABELS: Record<string, string> = {
-  lidar_stream: "LiDAR stream",
-  sensors: "Sensors",
-  localization: "Localization",
-  navigation: "Navigation",
-  route_manager: "Route manager",
-};
-
 function useFlash(): [string | null, (msg: string) => void] {
   const [msg, setMsg] = useState<string | null>(null);
   const flash = (m: string) => {
@@ -122,7 +115,7 @@ function useFlash(): [string | null, (msg: string) => void] {
 
 export function ControlPanel() {
   const { state } = useRobotState();
-  const { connected: teleopConnected, velocity, enabled: teleopEnabled, setEnabled: setTeleopEnabled } = useTeleop();
+  const { connected: teleopConnected, locked: teleopLocked, velocity, enabled: teleopEnabled, setEnabled: setTeleopEnabled } = useTeleop();
 
   const [maps, setMaps] = useState<string[]>([]);
   const [selectedMap, setSelectedMap] = useState("microgrid");
@@ -148,7 +141,7 @@ export function ControlPanel() {
     if (state?.mission_active && teleopEnabled) {
       setTeleopEnabled(false);
     }
-  }, [state?.mission_active]);
+  }, [state?.mission_active, teleopEnabled, setTeleopEnabled]);
 
   const busy = (key: string) => loading[key] === true;
   const setBusy = (key: string, v: boolean) =>
@@ -311,7 +304,9 @@ export function ControlPanel() {
               ● vx {velocity.vx.toFixed(2)} vy {velocity.vy.toFixed(2)} ω {velocity.omega.toFixed(2)}
             </span>
           ) : (
-            <span style={{ color: "#ff4444" }}>● disconnected</span>
+            <span style={{ color: teleopLocked ? "#f5a623" : "#ff4444" }}>
+          {teleopLocked ? "● locked (another client active)" : "● disconnected"}
+        </span>
           )}
         </div>
       )}

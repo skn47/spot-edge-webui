@@ -225,11 +225,18 @@ async def mission_start(body: MissionStartRequest) -> MissionResponse:
         pass  # already running is fine
     await asyncio.sleep(2.0)
 
+    if not _process_manager.status("localization").running:
+        return MissionResponse(ok=False, action="start", message="localization failed to start — check logs")
+
     try:
         _process_manager.start("navigation", map_name=body.map_name)
     except RuntimeError:
         pass
     await asyncio.sleep(2.0)
+
+    if not _process_manager.status("navigation").running:
+        _process_manager.stop("localization")
+        return MissionResponse(ok=False, action="start", message="navigation failed to start — check logs")
 
     try:
         _process_manager.start("route_manager")

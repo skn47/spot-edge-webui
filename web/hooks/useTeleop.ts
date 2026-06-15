@@ -11,6 +11,7 @@ export interface TeleopVelocity {
 
 export interface TeleopHook {
   connected: boolean;
+  locked: boolean;
   velocity: TeleopVelocity;
   enabled: boolean;
   setEnabled: (v: boolean) => void;
@@ -29,12 +30,14 @@ const ZERO_VEL: TeleopVelocity = { vx: 0, vy: 0, omega: 0 };
 export function useTeleop(): TeleopHook {
   const [enabled, setEnabledState] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [velocity, setVelocity] = useState<TeleopVelocity>(ZERO_VEL);
 
   const wsRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const delayRef = useRef(RECONNECT_BASE_MS);
   const enabledRef = useRef(false);
+  const lockedRef = useRef(false);
 
   // Keyboard state
   const keysRef = useRef<Set<string>>(new Set());
@@ -93,15 +96,21 @@ export function useTeleop(): TeleopHook {
       setConnected(true);
     };
 
-    ws.onmessage = () => {
-      // server sends connection/error confirmations — ignore
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data as string);
+        if (msg.type === "error" && msg.message === "teleop_locked") {
+          lockedRef.current = true;
+          setLocked(true);
+        }
+      } catch {}
     };
 
     ws.onerror = () => {};
 
     ws.onclose = () => {
       setConnected(false);
-      if (!enabledRef.current) return;
+      if (!enabledRef.current || lockedRef.current) return;
       timerRef.current = setTimeout(() => {
         delayRef.current = Math.min(delayRef.current * 2, RECONNECT_MAX_MS);
         connectWs();
@@ -124,6 +133,8 @@ export function useTeleop(): TeleopHook {
       wsRef.current = null;
       setConnected(false);
       setVelocity(ZERO_VEL);
+      lockedRef.current = false;
+      setLocked(false);
     } else {
       connectWs();
       sendIntervalRef.current = setInterval(() => {
@@ -170,5 +181,5 @@ export function useTeleop(): TeleopHook {
     };
   }, []);
 
-  return { connected, velocity, enabled, setEnabled };
+  return { connected, locked, velocity, enabled, setEnabled };
 }

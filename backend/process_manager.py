@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     pass
 
 WS_DIR = Path(__file__).parent.parent
+MAP_DIR = WS_DIR / "install" / "spot_navigation" / "share" / "spot_navigation" / "map"
 
 # Base commands — map paths are appended dynamically for localization/navigation.
 # Never shell=True; these are always executed as argument lists.
@@ -44,12 +45,12 @@ _ALLOWLIST_BASE: dict[str, list[str]] = {
 
 MAP_CATALOG: dict[str, dict[str, Path]] = {
     "microgrid": {
-        "pcd": WS_DIR / "src/spot_navigation/map/microgrid_transformed.pcd",
-        "vgh": WS_DIR / "src/spot_navigation/map/microgrid_transformed.vgh",
+        "pcd": MAP_DIR / "microgrid_transformed.pcd",
+        "vgh": MAP_DIR / "microgrid_transformed.vgh",
     },
     "office": {
-        "pcd": WS_DIR / "src/spot_navigation/map/office_2026_05_07_113224.pcd",
-        "vgh": WS_DIR / "src/spot_navigation/map/office_2026_05_07_113224.vgh",
+        "pcd": MAP_DIR / "office_2026_05_07_113224.pcd",
+        "vgh": MAP_DIR / "office_2026_05_07_113224.vgh",
     },
 }
 
@@ -151,6 +152,7 @@ class ProcessManager:
         except (ProcessLookupError, subprocess.TimeoutExpired):
             try:
                 os.killpg(os.getpgid(record.proc.pid), signal.SIGKILL)
+                record.proc.wait()
             except ProcessLookupError:
                 pass
 
@@ -186,9 +188,6 @@ class ProcessManager:
     # ------------------------------------------------------------------
     # Log streaming
     # ------------------------------------------------------------------
-
-    def spawn_reader(self, name: str, proc: subprocess.Popen, stream: str) -> threading.Thread:
-        return self._spawn_reader(name, proc, stream)
 
     def _spawn_reader(
         self, name: str, proc: subprocess.Popen, stream: str

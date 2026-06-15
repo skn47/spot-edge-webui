@@ -9,3 +9,11 @@ export const BACKEND_WS_URL =
 
 export const POINT_SIZE = 0.02;
 export const POINT_COLOR = "#00ff88";
+
+export const PROCESS_LABELS: Record<string, string> = {
+  lidar_stream: "LiDAR stream",
+  sensors: "Sensors",
+  localization: "Localization",
+  navigation: "Navigation",
+  route_manager: "Route manager",
+};

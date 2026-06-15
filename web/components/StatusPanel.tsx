@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useEffect } from "react";
+import { PROCESS_LABELS } from "@/lib/constants";
 import { useRobotState } from "@/hooks/useRobotState";
 
 const S = {
@@ -127,7 +128,7 @@ export function StatusPanel() {
           ? Object.entries(state.process_statuses).map(([name, status]) => (
               <div key={name} style={S.processRow}>
                 <span style={S.dot(status.running)} />
-                <span style={S.label}>{name}</span>
+                <span style={S.label}>{PROCESS_LABELS[name] ?? name}</span>
                 {status.running && status.pid != null && (
                   <span style={{ ...S.label, marginLeft: "auto", color: "#444", fontSize: 10 }}>
                     pid {status.pid}
