@@ -164,13 +164,6 @@ void LocalizationNode::scanCallback(const sensor_msgs::msg::PointCloud2::ConstSh
 {
   if (!this->map_initialized_ || !this->has_odom_) return;
 
-  // If we haven't received an initial pose yet, we can't localize
-  // (unless we assume start at 0,0,0, but usually we wait)
-  if (!this->initial_pose_received_) {
-      RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Waiting for initial pose...");
-      return; 
-  }
-
   pcl::PointCloud<PointType>::Ptr scan(new pcl::PointCloud<PointType>());
   pcl::fromROSMsg(*msg, *scan);
   const std::size_t raw_scan_points = scan->size();

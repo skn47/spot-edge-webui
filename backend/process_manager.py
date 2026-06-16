@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 WS_DIR = Path(__file__).parent.parent
 MAP_DIR = WS_DIR / "install" / "spot_navigation" / "share" / "spot_navigation" / "map"
+RVIZ_DIR = WS_DIR / "install" / "spot_navigation" / "share" / "spot_navigation" / "rviz"
 
 # Base commands — map paths are appended dynamically for localization/navigation.
 # Never shell=True; these are always executed as argument lists.
@@ -40,6 +41,9 @@ _ALLOWLIST_BASE: dict[str, list[str]] = {
     "route_manager": [
         "ros2", "run", "spot_navigation", "route_manager",
         "--ros-args", "-p", "route_name:=midpoint",
+    ],
+    "rviz": [
+        "rviz2", "-d", str(RVIZ_DIR / "localization.rviz"),
     ],
 }
 

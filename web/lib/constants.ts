@@ -16,4 +16,5 @@ export const PROCESS_LABELS: Record<string, string> = {
   localization: "Localization",
   navigation: "Navigation",
   route_manager: "Route manager",
+  rviz: "RViz2",
 };

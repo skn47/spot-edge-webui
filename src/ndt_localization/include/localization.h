@@ -56,7 +56,7 @@ private:
   Eigen::Matrix4f map_to_odom_;   // map -> odom
   Eigen::Matrix4f odom_to_base_;  // (current) odom -> base_link
   bool map_initialized_ = false;
-  bool initial_pose_received_ = false;
+  bool initial_pose_received_ = true;
 
   // Buffers
   std::mutex mutex_;
