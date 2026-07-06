@@ -38,6 +38,7 @@ class LidarStreamNode(Node):
         self._ws_clients_lock = threading.Lock()
         self._last_publish_time = 0.0
         self._min_interval = 1.0 / max(self._publish_rate_hz, 0.1)
+        self._ws_stop_event: asyncio.Event | None = None
 
         self.create_subscription(PointCloud2, self._input_topic, self._cloud_cb, 5)
 
@@ -56,7 +57,12 @@ class LidarStreamNode(Node):
             return
         self._last_publish_time = now
 
-        xyz = parse_pointcloud2_xyz(msg)
+        try:
+            xyz = parse_pointcloud2_xyz(msg)
+        except Exception as exc:
+            self.get_logger().warn(f"Failed to parse PointCloud2 message: {exc}")
+            return
+
         if len(xyz) == 0:
             return
 
@@ -105,19 +111,22 @@ class LidarStreamNode(Node):
 
     def _run_ws_server(self) -> None:
         asyncio.set_event_loop(self._loop)
+        self._ws_stop_event = asyncio.Event()
 
         async def _serve():
             async with websockets.serve(self._ws_handler, self._ws_host, self._ws_port):
                 self.get_logger().info(
                     f"WebSocket server listening on ws://{self._ws_host}:{self._ws_port}"
                 )
-                await asyncio.Future()  # run forever
+                await self._ws_stop_event.wait()
 
         self._loop.run_until_complete(_serve())
 
     def destroy_node(self) -> None:
-        self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._ws_stop_event is not None:
+            self._loop.call_soon_threadsafe(self._ws_stop_event.set)
         self._ws_thread.join(timeout=2.0)
+        self._loop.close()
         super().destroy_node()
 
 
