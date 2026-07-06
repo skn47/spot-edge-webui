@@ -40,6 +40,24 @@ export interface LogLine {
   timestamp: number;
 }
 
+export interface TopicInfo {
+  label: string;
+  exists: boolean;
+  publishers: number;
+  subscribers: number;
+  ok: boolean;
+  warning: string | null;
+}
+
+export interface DiagnosticResult {
+  ok: boolean;
+  checks: {
+    zenoh_router: { ok: boolean; detail: string };
+    nodes: { ok: boolean; found: string[]; missing: string[]; detail?: string };
+    topics: Record<string, TopicInfo>;
+  };
+}
+
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BACKEND_URL}${path}`, {
     method: "POST",
@@ -77,4 +95,10 @@ export async function fetchMaps(): Promise<string[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return data.maps ?? [];
+}
+
+export async function runDiagnostic(): Promise<DiagnosticResult> {
+  const res = await fetch(`${BACKEND_URL}/api/diagnostic`);
+  if (!res.ok) throw new Error(`Diagnostic request failed: ${res.statusText}`);
+  return res.json() as Promise<DiagnosticResult>;
 }

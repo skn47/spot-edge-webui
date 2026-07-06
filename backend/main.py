@@ -26,6 +26,7 @@ from models import (
     RobotStateMsg,
     TeleopCmd,
 )
+from diagnostic import run_diagnostic
 from process_manager import ProcessManager
 from ros_bridge import RosBridge
 
@@ -156,6 +157,12 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "ros_available": _ros_bridge.available}
+
+
+@app.get("/api/diagnostic")
+async def diagnostic():
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, run_diagnostic)
 
 
 # ---------------------------------------------------------------------------

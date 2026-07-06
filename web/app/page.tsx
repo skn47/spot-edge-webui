@@ -1,6 +1,7 @@
 import { LidarViewer } from "@/components/LidarViewer";
 import { StatusPanel } from "@/components/StatusPanel";
 import { ControlPanel } from "@/components/ControlPanel";
+import { DiagnosticPanel } from "@/components/DiagnosticPanel";
 import { LogPanel } from "@/components/LogPanel";
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
           <StatusPanel />
           <ControlPanel />
+          <DiagnosticPanel />
         </div>
         <LogPanel />
       </div>
