@@ -1,22 +1,24 @@
 #include "localization.h"
 
+namespace fast_lio
+{
+
 LocalizationNode::LocalizationNode() : Node("localization_node")
 {
   RCLCPP_INFO(this->get_logger(), "Initializing FAST-LIO Localization Node ...");
 
   // Parameters
+  this->declare_parameter<std::string>("localization.global_frame_id", "map");
   this->declare_parameter<std::string>("odom_frame_id", "camera_init");
   this->declare_parameter<std::string>("base_frame_id", "base_link");
-  this->declare_parameter<std::string>("map_frame_id", "map");
-
   this->declare_parameter<double>("localization.ndt_resolution", 1.0);
   this->declare_parameter<double>("localization.ndt_step_size", 0.1);
   this->declare_parameter<double>("localization.ndt_trans_epsilon", 0.01);
   this->declare_parameter<int>("localization.ndt_max_iter", 30);
 
+  this->get_parameter("localization.global_frame_id", this->global_frame_id_);
   this->get_parameter("odom_frame_id", this->odom_frame_id_);
   this->get_parameter("base_frame_id", this->base_frame_id_);
-  this->get_parameter("map_frame_id", this->global_frame_id_);
   this->get_parameter("localization.ndt_resolution", this->ndt_resolution_);
   this->get_parameter("localization.ndt_step_size", this->ndt_step_size_);
   this->get_parameter("localization.ndt_trans_epsilon", this->ndt_trans_epsilon_);
@@ -24,6 +26,8 @@ LocalizationNode::LocalizationNode() : Node("localization_node")
 
   // TF
   this->tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+  this->tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+  this->tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_);
 
   // Initialize State
   this->map_to_odom_ = Eigen::Matrix4f::Identity();
@@ -34,11 +38,11 @@ LocalizationNode::LocalizationNode() : Node("localization_node")
   rclcpp::QoS qos_profile(1);
   qos_profile.transient_local();
   this->map_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      "/global_map", qos_profile, std::bind(&LocalizationNode::mapCallback, this, std::placeholders::_1));
+      "global_map", qos_profile, std::bind(&LocalizationNode::mapCallback, this, std::placeholders::_1));
 
   // Odom: High frequency
   this->odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/odometry_lio", 10, std::bind(&LocalizationNode::odomCallback, this, std::placeholders::_1));
+      "/Odometry", 10, std::bind(&LocalizationNode::odomCallback, this, std::placeholders::_1));
 
   // Scan: Use undistorted body frame cloud from FAST-LIO
   // Note: /cloud_registered_body is usually cleaner for matching
@@ -50,7 +54,7 @@ LocalizationNode::LocalizationNode() : Node("localization_node")
       "/initialpose", 1, std::bind(&LocalizationNode::initialPoseCallback, this, std::placeholders::_1));
 
   // Publisher
-  this->pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>("/odometry_map", 10);
+  this->pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>("/odometry_global", 10);
 }
 
 LocalizationNode::~LocalizationNode() {}
@@ -178,7 +182,7 @@ void LocalizationNode::scanCallback(const sensor_msgs::msg::PointCloud2::ConstSh
 void LocalizationNode::initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msg)
 {
   RCLCPP_INFO(this->get_logger(), "Received Initial Pose.");
-
+  
   Eigen::Isometry3d initial_pose_d;
   tf2::fromMsg(msg->pose.pose, initial_pose_d);
   Eigen::Matrix4f initial_pose = initial_pose_d.cast<float>().matrix(); // T_map_base
@@ -195,10 +199,12 @@ void LocalizationNode::initialPoseCallback(const geometry_msgs::msg::PoseWithCov
   RCLCPP_INFO(this->get_logger(), "Localization Reset.");
 }
 
+} // namespace fast_lio
+
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<LocalizationNode>();
+  auto node = std::make_shared<fast_lio::LocalizationNode>();
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;

@@ -45,15 +45,17 @@ void FARMaster::Init() {
   read_command_sub_   = nh_->create_subscription<std_msgs::msg::String>("/read_file_dir", 1, std::bind(&FARMaster::ReadFileCommand, this, std::placeholders::_1));
   save_command_sub_   = nh_->create_subscription<std_msgs::msg::String>("/save_file_dir", 1, std::bind(&FARMaster::SaveFileCommand, this, std::placeholders::_1));
 
-  // DEBUG Publisher
-  dynamic_obs_pub_     = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_dynamic_obs_debug",1);
-  surround_free_debug_ = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_free_debug",1);
-  surround_obs_debug_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_obs_debug",1);
-  scan_grid_debug_     = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_scanGrid_debug",1);
-  new_PCL_pub_         = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_new_debug",1);
-  terrain_height_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_terrain_height_debug",1);
-
   this->LoadROSParams();
+
+  if (master_params_.is_debug_output) {
+    // DEBUG Publisher
+    dynamic_obs_pub_     = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_dynamic_obs_debug",1);
+    surround_free_debug_ = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_free_debug",1);
+    surround_obs_debug_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_obs_debug",1);
+    scan_grid_debug_     = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_scanGrid_debug",1);
+    new_PCL_pub_         = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_new_debug",1);
+    terrain_height_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/FAR_terrain_height_debug",1);
+  }
 
   //print ROS params load complete
   RCLCPP_INFO(nh_->get_logger(), "FAR Planner ROS Params Initiated");
@@ -800,19 +802,20 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
 
   if (!FARUtil::surround_obs_cloud_->empty()) is_cloud_init_ = true;
 
-  /* visualize clouds */
-  planner_viz_.VizPointCloud(new_PCL_pub_, FARUtil::stack_new_cloud_);
-  planner_viz_.VizPointCloud(dynamic_obs_pub_, FARUtil::cur_dyobs_cloud_);
-  planner_viz_.VizPointCloud(surround_free_debug_, FARUtil::surround_free_cloud_);
-  planner_viz_.VizPointCloud(surround_obs_debug_,  FARUtil::surround_obs_cloud_);
-  planner_viz_.VizPointCloud(terrain_height_pub_, terrain_height_ptr_);
+  if (master_params_.is_debug_output) {
+    planner_viz_.VizPointCloud(new_PCL_pub_, FARUtil::stack_new_cloud_);
+    planner_viz_.VizPointCloud(dynamic_obs_pub_, FARUtil::cur_dyobs_cloud_);
+    planner_viz_.VizPointCloud(surround_free_debug_, FARUtil::surround_free_cloud_);
+    planner_viz_.VizPointCloud(surround_obs_debug_,  FARUtil::surround_obs_cloud_);
+    planner_viz_.VizPointCloud(terrain_height_pub_, terrain_height_ptr_);
+  }
   // visualize map grid
   PointStack neighbor_centers, occupancy_centers;
   map_handler_.GetNeighborCeilsCenters(neighbor_centers);
   map_handler_.GetOccupancyCeilsCenters(occupancy_centers);
   planner_viz_.VizMapGrids(neighbor_centers, occupancy_centers, map_params_.cell_length, map_params_.cell_height);
   // DBBUG visual raycast grids
-  if (!master_params_.is_static_env) {
+  if (master_params_.is_debug_output && !master_params_.is_static_env) {
     scan_handler_.GridVisualCloud(scan_grid_ptr_, GridStatus::RAY);
     planner_viz_.VizPointCloud(scan_grid_debug_, scan_grid_ptr_);
   }

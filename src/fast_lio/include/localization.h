@@ -18,10 +18,15 @@
 
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 
 using PointType = pcl::PointXYZ;
+
+namespace fast_lio
+{
 
 class LocalizationNode : public rclcpp::Node
 {
@@ -45,6 +50,8 @@ private:
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_;
 
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   // Data
   pcl::PointCloud<PointType>::Ptr global_map_;
@@ -70,3 +77,5 @@ private:
   double ndt_trans_epsilon_;
   int ndt_max_iter_;
 };
+
+} // namespace fast_lio

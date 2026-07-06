@@ -7,13 +7,13 @@
 
         # icp settings
         feature_extract_enable: false
-        point_filter_num: 2
+        point_filter_num: 3
         max_iteration: 5
-        filter_size_surf: 0.5
-        filter_size_map: 0.5
+        filter_size_surf: 0.7
+        filter_size_map: 0.7
         cube_side_length: 1000.0
         runtime_pos_log_enable: false
-        map_file_path: "microgrid_transformed.pcd"
+        map_file_path: "kitchen.pcd"
 
         common:
             lid_topic:  "/velodyne_points"
@@ -26,7 +26,7 @@
             scan_line: 32                 # VLP-32C publishes ring IDs 0..31
             scan_rate: 10                 # Hz
             timestamp_unit: 0             # s (0), ms (1), or us (2)
-            blind: 0.75
+            blind: 1.0
             max_range: 30.0
 
         mapping:
@@ -53,10 +53,10 @@
 
         terrain_cloud:
             use_pmf: true
-            pmf_max_window_size: 3.0
-            pmf_slope: 0.2
-            pmf_initial_distance: 0.15
-            pmf_max_distance: 0.35
+            pmf_max_window_size: 5.0
+            pmf_slope: 0.5
+            pmf_initial_distance: 0.3
+            pmf_max_distance: 1.0
             ceiling_height_threshold: 1.5
             filter_operator_fov: false
             operator_fov_deg: 120.0

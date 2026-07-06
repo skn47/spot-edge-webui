@@ -80,21 +80,6 @@ def generate_launch_description():
         remappings=[("/Odometry", "/odometry_lio")],
     )
 
-    # Static TF: FAST-LIO "body" frame → "base_link".
-    # FAST-LIO broadcasts camera_init→body; with identity extrinsics body IS base_link,
-    # but TF requires an explicit link to connect to the base_link→sensor_base→velodyne chain.
-    body_to_base_link_tf = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="static_tf_body_to_base_link",
-        arguments=[
-            "--x", "0.0", "--y", "0.0", "--z", "0.0",
-            "--roll", "0.0", "--pitch", "0.0", "--yaw", "0.0",
-            "--frame-id", "body",
-            "--child-frame-id", "base_link",
-        ],
-    )
-
     # 3. NDT Localization Node
     localization_node = Node(
         package="ndt_localization",
@@ -129,7 +114,6 @@ def generate_launch_description():
             use_sim_time_arg,
             config_file_arg,
             rviz_arg,
-            body_to_base_link_tf,
             terrain_processor_node,
             fast_lio_node,
             localization_node,

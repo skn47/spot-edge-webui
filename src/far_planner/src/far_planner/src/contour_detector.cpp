@@ -54,7 +54,7 @@ void ContourDetector::UpdateImgMatWithCloud(const PointCloudPtr& pc, cv::Mat& im
             }
         }
     }
-    if (!FARUtil::IsStaticEnv) {
+    if (cd_params_.kThredValue > 0) {
         cv::threshold(img_mat, img_mat, cd_params_.kThredValue, 1.0, cv::ThresholdTypes::THRESH_BINARY);
     }
     if (cd_params_.is_save_img) this->SaveCurrentImg(img_mat);
@@ -184,6 +184,5 @@ void ContourDetector::TopoFilterContours(std::vector<CVPointStack>& contoursInOu
         }
     }
 }
-
 
 
