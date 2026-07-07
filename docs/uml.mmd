@@ -1,0 +1,74 @@
+flowchart LR
+    operator([Operator])
+    spot([Spot])
+
+    subgraph browser["Browser / Next.js :3000"]
+        controls["Controls<br/>Mission start / stop / pause<br/>E-stop<br/>Per-process on/off<br/>Joystick / gamepad"]
+        restClient["HTTP REST client<br/>/api/mission/*<br/>/api/process/*<br/>/api/maps<br/>/api/diagnostic"]
+        teleopClient["WebSocket client<br/>/ws/teleop<br/>vx, vy, omega at 10 Hz"]
+        stateClient["WebSocket client<br/>/ws/state<br/>robot pose and process state"]
+        logsClient["WebSocket client<br/>/ws/logs<br/>live stdout / stderr"]
+        lidarClient["Binary WebSocket client<br/>:8765<br/>point cloud frames"]
+        viewer["Viewer<br/>LiDAR point cloud<br/>robot pose<br/>process status<br/>log stream"]
+
+        controls --> restClient
+        controls --> teleopClient
+        stateClient --> viewer
+        logsClient --> viewer
+        lidarClient --> viewer
+    end
+
+    subgraph backend["FastAPI Backend :8000"]
+        api["REST API<br/>health, maps, diagnostic<br/>process control<br/>mission control"]
+        rosRelay["ROS relay node<br/>pub: /cmd_vel<br/>pub: /goal_pose<br/>sub: /odometry_map"]
+        supervisor["Process supervisor<br/>runs allowlisted ROS commands<br/>captures process logs<br/>tracks process status"]
+        stateBroadcaster["State broadcaster<br/>pushes RobotStateMsg<br/>every 0.5 s"]
+        logBroadcaster["Log broadcaster<br/>pushes subprocess output"]
+
+        api --> supervisor
+        api --> rosRelay
+        rosRelay --> stateBroadcaster
+        supervisor --> stateBroadcaster
+        supervisor --> logBroadcaster
+    end
+
+    subgraph ros["ROS 2 Navigation Stack / NUC"]
+        sensors["Sensors<br/>Velodyne VLP-32C<br/>IMU<br/>OWON voltage<br/>radio bridge"]
+        sensorTopics["Sensor topics<br/>/velodyne_points<br/>/imu/data"]
+        localization["Localization<br/>terrain_processor<br/>FAST-LIO<br/>NDT localization"]
+        navigation["Navigation<br/>FAR Planner<br/>path_follower controller<br/>route_manager"]
+        rosTopics["ROS topics<br/>/odometry_map<br/>/goal_pose<br/>/cmd_vel"]
+        lidarNode["LiDAR WebSocket node<br/>lidar_web_bridge<br/>:8765"]
+
+        sensors --> sensorTopics
+        sensorTopics --> localization
+        sensorTopics --> lidarNode
+        localization --> rosTopics
+        rosTopics --> navigation
+        navigation --> rosTopics
+        rosTopics -- "/cmd_vel" --> spot
+    end
+
+    operator --> controls
+    operator --> viewer
+
+    restClient -- "HTTP POST/GET :8000" --> api
+    teleopClient -- "WebSocket :8000 /ws/teleop" --> rosRelay
+    stateBroadcaster -- "WebSocket :8000 /ws/state" --> stateClient
+    logBroadcaster -- "WebSocket :8000 /ws/logs" --> logsClient
+    lidarNode -- "binary WebSocket :8765" --> lidarClient
+
+    supervisor -- "subprocess launch<br/>lidar_stream, sensors,<br/>localization, navigation,<br/>route_manager, rviz" --> ros
+    supervisor -- "SIGTERM / SIGKILL" --> ros
+    rosRelay -- "/cmd_vel, /goal_pose" --> rosTopics
+    rosTopics -- "/odometry_map" --> rosRelay
+
+    classDef boundary fill:#424242,stroke:#999,color:#eee
+    classDef component fill:#1f1f1f,stroke:#aaa,color:#ddd
+    classDef interface fill:#5a5a5a,stroke:#666,color:#eee
+    classDef actor fill:#2b2b2b,stroke:#bbb,color:#eee
+
+    class browser,backend,ros boundary
+    class controls,viewer,api,rosRelay,supervisor,stateBroadcaster,logBroadcaster,sensors,localization,navigation,lidarNode component
+    class restClient,teleopClient,stateClient,logsClient,lidarClient,sensorTopics,rosTopics interface
+    class operator,spot actor
