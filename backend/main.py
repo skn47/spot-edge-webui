@@ -192,13 +192,13 @@ async def process_action(
 
     try:
         if action == "start":
-            status = _process_manager.start(name)
+            status = _process_manager.start(name, map_name=body.map_name)
             return ProcessResponse(ok=True, pid=status.pid, message=f"started {name} (pid {status.pid})")
         elif action == "stop":
             status = _process_manager.stop(name)
             return ProcessResponse(ok=True, message=f"stopped {name}")
         elif action == "restart":
-            status = _process_manager.restart(name)
+            status = _process_manager.restart(name, map_name=body.map_name)
             return ProcessResponse(ok=True, pid=status.pid, message=f"restarted {name} (pid {status.pid})")
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))

@@ -22,6 +22,7 @@ class TeleopCmd(BaseModel):
 
 class ProcessRequest(BaseModel):
     script_name: str
+    map_name: str | None = None
 
 
 class MissionStartRequest(BaseModel):

@@ -73,10 +73,12 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 
 export async function processAction(
   action: "start" | "stop" | "restart",
-  scriptName: string
+  scriptName: string,
+  mapName?: string
 ): Promise<ProcessResponse> {
   return post<ProcessResponse>(`/api/process/${action}`, {
     script_name: scriptName,
+    ...(mapName !== undefined && { map_name: mapName }),
   });
 }
 

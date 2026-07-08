@@ -147,11 +147,14 @@ export function ControlPanel() {
   const setBusy = (key: string, v: boolean) =>
     setLoading((l) => ({ ...l, [key]: v }));
 
+  const MAP_SENSITIVE = new Set(["localization", "navigation"]);
+
   async function handleProcess(action: "start" | "stop" | "restart", name: string) {
     const key = `${action}-${name}`;
     setBusy(key, true);
     try {
-      const r: ProcessResponse = await processAction(action, name);
+      const mapName = action !== "stop" && MAP_SENSITIVE.has(name) ? selectedMap : undefined;
+      const r: ProcessResponse = await processAction(action, name, mapName);
       setFlash(r.message);
     } catch (e: unknown) {
       setFlash(`Error: ${e instanceof Error ? e.message : String(e)}`);
