@@ -47,26 +47,26 @@ _ALLOWLIST_BASE: dict[str, list[str]] = {
     ],
 }
 
-MAP_CATALOG: dict[str, dict[str, Path]] = {
-    "microgrid": {
-        "pcd": MAP_DIR / "microgrid_transformed.pcd",
-        "vgh": MAP_DIR / "microgrid_transformed.vgh",
-    },
-    "office": {
-        "pcd": MAP_DIR / "office_2026_05_07_113224.pcd",
-        "vgh": MAP_DIR / "office_2026_05_07_113224.vgh",
-    },
-}
+def _discover_maps() -> dict[str, dict[str, Path]]:
+    """Return all maps in MAP_DIR that have both a .pcd and a .vgh file."""
+    if not MAP_DIR.is_dir():
+        return {}
+    catalog: dict[str, dict[str, Path]] = {}
+    for pcd in sorted(MAP_DIR.glob("*.pcd")):
+        vgh = pcd.with_suffix(".vgh")
+        if vgh.exists():
+            catalog[pcd.stem] = {"pcd": pcd, "vgh": vgh}
+    return catalog
 
 
 def _build_cmd(name: str, map_name: str | None = None) -> list[str]:
     cmd = list(_ALLOWLIST_BASE[name])
-    if name == "localization" and map_name:
-        maps = MAP_CATALOG[map_name]
-        cmd.append(f"map_path:={maps['pcd']}")
-    elif name == "navigation" and map_name:
-        maps = MAP_CATALOG[map_name]
-        cmd.append(f"prior_map_path:={maps['vgh']}")
+    if map_name:
+        maps = _discover_maps()[map_name]
+        if name == "localization":
+            cmd.append(f"map_path:={maps['pcd']}")
+        elif name == "navigation":
+            cmd.append(f"prior_map_path:={maps['vgh']}")
     return cmd
 
 
@@ -119,8 +119,8 @@ class ProcessManager:
     def start(self, name: str, map_name: str | None = None) -> ProcessStatus:
         if name not in _ALLOWLIST_BASE:
             raise ValueError(f"'{name}' not in allowlist")
-        if map_name is not None and map_name not in MAP_CATALOG:
-            raise ValueError(f"map '{map_name}' not in MAP_CATALOG")
+        if map_name is not None and map_name not in _discover_maps():
+            raise ValueError(f"map '{map_name}' not found in {MAP_DIR}")
 
         record = self._records[name]
         if record.proc is not None and record.proc.poll() is None:
@@ -187,7 +187,7 @@ class ProcessManager:
 
     @property
     def map_names(self) -> list[str]:
-        return list(MAP_CATALOG.keys())
+        return list(_discover_maps().keys())
 
     # ------------------------------------------------------------------
     # Log streaming
