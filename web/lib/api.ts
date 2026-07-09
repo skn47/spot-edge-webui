@@ -107,6 +107,32 @@ export async function fetchMaps(): Promise<string[]> {
   return data.maps ?? [];
 }
 
+export interface RouteUploadResponse {
+  ok: boolean;
+  filename: string;
+  goal_count: number;
+}
+
+export async function uploadRoute(file: File): Promise<RouteUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${BACKEND_URL}/api/route/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(detail.detail ?? res.statusText);
+  }
+  return res.json() as Promise<RouteUploadResponse>;
+}
+
+export async function clearRoute(): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BACKEND_URL}/api/route/clear`, { method: "POST" });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
 export async function runDiagnostic(): Promise<DiagnosticResult> {
   const res = await fetch(`${BACKEND_URL}/api/diagnostic`);
   if (!res.ok) throw new Error(`Diagnostic request failed: ${res.statusText}`);

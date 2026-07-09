@@ -40,7 +40,6 @@ _ALLOWLIST_BASE: dict[str, list[str]] = {
     ],
     "route_manager": [
         "ros2", "run", "spot_navigation", "route_manager",
-        "--ros-args", "-p", "route_name:=midpoint",
     ],
     "rviz": [
         "rviz2", "-d", str(RVIZ_DIR / "localization.rviz"),
@@ -59,7 +58,7 @@ def _discover_maps() -> dict[str, dict[str, Path]]:
     return catalog
 
 
-def _build_cmd(name: str, map_name: str | None = None) -> list[str]:
+def _build_cmd(name: str, map_name: str | None = None, route_file: str | None = None) -> list[str]:
     cmd = list(_ALLOWLIST_BASE[name])
     if map_name:
         maps = _discover_maps()[map_name]
@@ -67,6 +66,11 @@ def _build_cmd(name: str, map_name: str | None = None) -> list[str]:
             cmd.append(f"map_path:={maps['pcd']}")
         elif name == "navigation":
             cmd.append(f"prior_map_path:={maps['vgh']}")
+    if name == "route_manager":
+        if route_file:
+            cmd += ["--ros-args", "-p", f"route_file:={route_file}"]
+        else:
+            cmd += ["--ros-args", "-p", "route_name:=midpoint"]
     return cmd
 
 
@@ -108,9 +112,16 @@ class ProcessManager:
         }
         self.log_queue: asyncio.Queue[LogLine] = asyncio.Queue()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._active_route_file: str | None = None
 
     def set_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
+
+    def set_route_file(self, path: str) -> None:
+        self._active_route_file = path
+
+    def clear_route_file(self) -> None:
+        self._active_route_file = None
 
     # ------------------------------------------------------------------
     # Public lifecycle API
@@ -126,7 +137,7 @@ class ProcessManager:
         if record.proc is not None and record.proc.poll() is None:
             raise RuntimeError(f"{name} already running")
 
-        cmd = _build_cmd(name, map_name)
+        cmd = _build_cmd(name, map_name=map_name, route_file=self._active_route_file)
         proc = subprocess.Popen(
             cmd,
             env=_ROS_ENV,
@@ -165,7 +176,7 @@ class ProcessManager:
 
     def restart(self, name: str, map_name: str | None = None) -> ProcessStatus:
         self.stop(name)
-        return self.start(name, map_name)
+        return self.start(name, map_name=map_name)
 
     def status(self, name: str) -> ProcessStatus:
         if name not in _ALLOWLIST_BASE:

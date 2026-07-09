@@ -12,7 +12,7 @@ from typing import Literal
 # are importable regardless of where uvicorn is invoked from.
 sys.path.insert(0, str(Path(__file__).parent))
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
@@ -28,6 +28,9 @@ from models import (
     VoltageState,
 )
 from diagnostic import run_diagnostic
+
+ROUTE_DIR = Path(__file__).parent / "routes"
+ACTIVE_ROUTE_PATH = ROUTE_DIR / "active_route.json"
 from process_manager import ProcessManager
 from ros_bridge import RosBridge
 
@@ -162,6 +165,54 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "ros_available": _ros_bridge.available}
+
+
+@app.post("/api/route/upload")
+async def route_upload(file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        data = json.loads(content)
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+
+    goals = data.get("goals")
+    if not isinstance(goals, list) or len(goals) == 0:
+        raise HTTPException(status_code=400, detail="'goals' must be a non-empty list")
+    for i, g in enumerate(goals):
+        if not isinstance(g, dict):
+            raise HTTPException(status_code=400, detail=f"goals[{i}] must be an object")
+        for field in ("x", "y"):
+            if field not in g:
+                raise HTTPException(status_code=400, detail=f"goals[{i}] missing '{field}'")
+            if not isinstance(g[field], (int, float)):
+                raise HTTPException(status_code=400, detail=f"goals[{i}].{field} must be a number")
+    for i, g in enumerate(goals):
+        for field in ("z", "yaw"):
+            if field in g and not isinstance(g[field], (int, float)):
+                raise HTTPException(status_code=400, detail=f"goals[{i}].{field} must be a number")
+    ip = data.get("initial_pose")
+    if ip is not None:
+        if not isinstance(ip, dict):
+            raise HTTPException(status_code=400, detail="'initial_pose' must be an object")
+        for field in ("x", "y"):
+            if field not in ip:
+                raise HTTPException(status_code=400, detail=f"initial_pose missing '{field}'")
+            if not isinstance(ip[field], (int, float)):
+                raise HTTPException(status_code=400, detail=f"initial_pose.{field} must be a number")
+        for field in ("z", "yaw"):
+            if field in ip and not isinstance(ip[field], (int, float)):
+                raise HTTPException(status_code=400, detail=f"initial_pose.{field} must be a number")
+
+    ROUTE_DIR.mkdir(parents=True, exist_ok=True)
+    ACTIVE_ROUTE_PATH.write_bytes(content)
+    _process_manager.set_route_file(str(ACTIVE_ROUTE_PATH))
+    return {"ok": True, "filename": file.filename, "goal_count": len(goals)}
+
+
+@app.post("/api/route/clear")
+async def route_clear():
+    _process_manager.clear_route_file()
+    return {"ok": True}
 
 
 @app.get("/api/diagnostic")

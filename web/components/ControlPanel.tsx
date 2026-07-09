@@ -1,13 +1,15 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  clearRoute,
   fetchMaps,
   missionAction,
   missionStart,
   processAction,
   ProcessResponse,
+  uploadRoute,
 } from "@/lib/api";
 import { PROCESS_LABELS } from "@/lib/constants";
 import { useRobotState } from "@/hooks/useRobotState";
@@ -119,8 +121,10 @@ export function ControlPanel() {
 
   const [maps, setMaps] = useState<string[]>([]);
   const [selectedMap, setSelectedMap] = useState("microgrid");
+  const [uploadedRoute, setUploadedRoute] = useState<string | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [flash, setFlash] = useFlash();
+  const routeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     console.log("[ControlPanel] mounted");
@@ -160,6 +164,35 @@ export function ControlPanel() {
       setFlash(`Error: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(key, false);
+    }
+  }
+
+  async function handleRouteClear() {
+    setBusy("route-clear", true);
+    try {
+      await clearRoute();
+      setUploadedRoute(null);
+      setFlash("Route cleared (fallback: midpoint)");
+    } catch (err: unknown) {
+      setFlash(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy("route-clear", false);
+    }
+  }
+
+  async function handleRouteUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy("route-upload", true);
+    try {
+      const r = await uploadRoute(file);
+      setUploadedRoute(r.filename);
+      setFlash(`Route loaded: ${r.filename} (${r.goal_count} goals)`);
+    } catch (err: unknown) {
+      setFlash(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy("route-upload", false);
+      if (routeInputRef.current) routeInputRef.current.value = "";
     }
   }
 
@@ -235,6 +268,39 @@ export function ControlPanel() {
           </div>
         );
       })}
+
+      {/* ---- Route ---- */}
+      <div style={S.sectionTitle}>Route</div>
+      <div style={S.row}>
+        <span style={{ ...S.label, fontSize: 10, color: uploadedRoute ? "#00ff88" : "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: 130 }}>
+          {uploadedRoute ?? "no route loaded"}
+        </span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {uploadedRoute && (
+            <button
+              style={S.btnRed(busy("route-clear"))}
+              disabled={busy("route-clear")}
+              onClick={handleRouteClear}
+            >
+              {busy("route-clear") ? "…" : "✕"}
+            </button>
+          )}
+          <button
+            style={S.btnGray(busy("route-upload"))}
+            disabled={busy("route-upload")}
+            onClick={() => routeInputRef.current?.click()}
+          >
+            {busy("route-upload") ? "…" : "Upload"}
+          </button>
+          <input
+            ref={routeInputRef}
+            type="file"
+            accept=".json"
+            style={{ display: "none" }}
+            onChange={handleRouteUpload}
+          />
+        </div>
+      </div>
 
       {/* ---- Mission controls ---- */}
       <div style={S.sectionTitle}>Mission Controls</div>

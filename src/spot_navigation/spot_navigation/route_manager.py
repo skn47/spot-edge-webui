@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
 
 import rclpy
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import Point, PoseStamped, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Bool
@@ -63,10 +64,20 @@ class RouteManager(Node):
     def __init__(self) -> None:
         super().__init__("route_manager")
 
+        # ── Step 1: determine route source ────────────────────────────────
+        self.declare_parameter("route_file", "")
         self.declare_parameter("route_name", "midpoint")
+        route_file = str(self.get_parameter("route_file").value)
         route_name = str(self.get_parameter("route_name").value)
-        self.route = self._select_route(route_name)
 
+        if route_file:
+            _parsed = self._parse_route_file(route_file)
+            loop_forever_default = False
+        else:
+            self.route = self._select_route(route_name)
+            loop_forever_default = self.route.loop_forever
+
+        # ── Step 2: declare remaining parameters ──────────────────────────
         self.declare_parameter("odom_topic", "/odometry_map")
         self.declare_parameter("goal_topic", "/goal_pose")
         self.declare_parameter("marker_topic", "/goal_markers")
@@ -75,8 +86,10 @@ class RouteManager(Node):
         self.declare_parameter("reach_status_ignore_sec", 0.5)
         self.declare_parameter("goal_republish_period", 2.0)
         self.declare_parameter("start_delay_sec", 2.0)
-        self.declare_parameter("loop_forever", self.route.loop_forever)
+        self.declare_parameter("loop_forever", loop_forever_default)
+        self.declare_parameter("initial_pose_settle_sec", 3.0)
 
+        # ── Step 3: read parameter values ─────────────────────────────────
         odom_topic = str(self.get_parameter("odom_topic").value)
         goal_topic = str(self.get_parameter("goal_topic").value)
         marker_topic = str(self.get_parameter("marker_topic").value)
@@ -90,14 +103,35 @@ class RouteManager(Node):
         )
         self.start_delay_sec = float(self.get_parameter("start_delay_sec").value)
         self.loop_forever = bool(self.get_parameter("loop_forever").value)
+        self.initial_pose_settle_sec = float(
+            self.get_parameter("initial_pose_settle_sec").value
+        )
 
-        self.route_points = list(self.route.waypoints)
-        self.loop_start_index = len(self.route.pre_loop)
+        # ── Step 4: build route points ────────────────────────────────────
+        if route_file:
+            self.route_points = _parsed["waypoints"]
+            self.loop_start_index = 0
+            self._has_loop_segment = False
+            self._initial_pose_msg = self._build_initialpose_msg(
+                _parsed.get("initial_pose"), self.frame_id
+            )
+            route_label = f"file:{route_file}"
+        else:
+            self.route_points = list(self.route.waypoints)
+            self.loop_start_index = len(self.route.pre_loop)
+            self._has_loop_segment = bool(self.route.loop)
+            self._initial_pose_msg = None
+            route_label = self.route.name
+
         if not self.route_points:
-            raise RuntimeError(f"Route '{self.route.name}' has no waypoints")
+            raise RuntimeError("Route has no waypoints")
 
+        # ── Step 5: publishers and subscribers ────────────────────────────
         self.goal_pub = self.create_publisher(PoseStamped, goal_topic, 10)
         self.marker_pub = self.create_publisher(MarkerArray, marker_topic, 1)
+        self.initialpose_pub = self.create_publisher(
+            PoseWithCovarianceStamped, "/initialpose", 1
+        )
         self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
         self.create_subscription(
             Bool, reach_status_topic, self._reach_status_callback, 10
@@ -112,14 +146,54 @@ class RouteManager(Node):
         self.route_started = False
         self.last_publish_time = None
         self.start_time = self.get_clock().now()
+        self._initial_pose_published_at = None
 
         self.create_timer(0.2, self._tick)
         self.create_timer(1.0, self._publish_route_markers)
 
         self.get_logger().info(
-            f"Route manager loaded '{self.route.name}' with "
+            f"Route manager loaded '{route_label}' with "
             f"{len(self.route_points)} waypoints"
         )
+
+    # ── Static helpers ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_route_file(path: str) -> dict:
+        with open(path) as f:
+            data = json.load(f)
+        waypoints = [
+            Waypoint(
+                name=g.get("name", f"goal_{i + 1}"),
+                x=float(g["x"]),
+                y=float(g["y"]),
+                z=float(g.get("z", 0.0)),
+                yaw=float(g.get("yaw", 0.0)),
+            )
+            for i, g in enumerate(data["goals"])
+        ]
+        return {"waypoints": waypoints, "initial_pose": data.get("initial_pose")}
+
+    @staticmethod
+    def _build_initialpose_msg(
+        ip: dict | None, frame_id: str
+    ) -> PoseWithCovarianceStamped | None:
+        if ip is None:
+            return None
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = frame_id
+        yaw = float(ip.get("yaw", 0.0))
+        msg.pose.pose.position.x = float(ip["x"])
+        msg.pose.pose.position.y = float(ip["y"])
+        msg.pose.pose.position.z = float(ip.get("z", 0.0))
+        msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        msg.pose.covariance[0] = 0.25    # σ²_x
+        msg.pose.covariance[7] = 0.25    # σ²_y
+        msg.pose.covariance[35] = 0.0685  # σ²_yaw
+        return msg
+
+    # ── Legacy route selection ────────────────────────────────────────────
 
     def _select_route(self, route_name: str) -> Route:
         if route_name not in ROUTES:
@@ -128,6 +202,8 @@ class RouteManager(Node):
                 f"Unknown route_name '{route_name}'. Valid routes: {valid_routes}"
             )
         return ROUTES[route_name]
+
+    # ── ROS callbacks ─────────────────────────────────────────────────────
 
     def _odom_callback(self, msg: Odometry) -> None:
         self.current_pose = msg.pose.pose
@@ -147,6 +223,8 @@ class RouteManager(Node):
         ):
             self.far_goal_reached = True
 
+    # ── State machine ─────────────────────────────────────────────────────
+
     def _tick(self) -> None:
         if self.current_pose is None:
             return
@@ -155,6 +233,13 @@ class RouteManager(Node):
         if not self.route_started and elapsed < self.start_delay_sec:
             return
         self.route_started = True
+
+        if self._initial_pose_published_at is not None:
+            settle_elapsed = (
+                self.get_clock().now() - self._initial_pose_published_at
+            ).nanoseconds / 1e9
+            if settle_elapsed < self.initial_pose_settle_sec:
+                return
 
         if self.active_goal is None:
             self._start_current_goal()
@@ -180,6 +265,17 @@ class RouteManager(Node):
         self._publish_active_goal(force=False)
 
     def _start_current_goal(self) -> None:
+        if self._initial_pose_msg is not None:
+            self._initial_pose_msg.header.stamp = self.get_clock().now().to_msg()
+            self.initialpose_pub.publish(self._initial_pose_msg)
+            self.get_logger().info(
+                f"Published initial pose to /initialpose; "
+                f"waiting {self.initial_pose_settle_sec:.1f}s for localization to settle"
+            )
+            self._initial_pose_published_at = self.get_clock().now()
+            self._initial_pose_msg = None
+            return  # _tick will hold until settle window passes
+
         self.active_goal = self._current_waypoint()
         if self.active_goal is None:
             return
@@ -200,7 +296,7 @@ class RouteManager(Node):
         return self._restart_loop_if_needed()
 
     def _restart_loop_if_needed(self) -> Waypoint | None:
-        if not self.loop_forever or not self.route.loop:
+        if not self.loop_forever or not self._has_loop_segment:
             return None
         self.active_index = self.loop_start_index
         return self.route_points[self.active_index]
