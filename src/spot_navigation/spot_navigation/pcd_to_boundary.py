@@ -138,6 +138,7 @@ def extract_boundary_polygons(
     max_polygons: int,
     max_vertices: int,
     add_outer_boundary: bool,
+    include_internal_obstacles: bool,
 ) -> tuple[list[np.ndarray], dict[str, object], np.ndarray, np.ndarray, tuple[int, int]]:
     min_xy = bounds_points[:, :2].min(axis=0) - padding
     max_xy = bounds_points[:, :2].max(axis=0) + padding
@@ -166,9 +167,24 @@ def extract_boundary_polygons(
     if inflate_kernel is not None:
         occupancy = cv2.dilate(occupancy, inflate_kernel)
 
-    contours, _ = cv2.findContours(occupancy, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    retrieval_mode = cv2.RETR_TREE if include_internal_obstacles else cv2.RETR_EXTERNAL
+    contours, hierarchy = cv2.findContours(occupancy, retrieval_mode, cv2.CHAIN_APPROX_NONE)
+    contour_depths: list[int] | None = None
+    if include_internal_obstacles and hierarchy is not None:
+        flat_hierarchy = hierarchy[0]
+        contour_depths = []
+        for idx in range(len(contours)):
+            depth = 0
+            parent = flat_hierarchy[idx][3]
+            while parent != -1:
+                depth += 1
+                parent = flat_hierarchy[parent][3]
+            contour_depths.append(depth)
+
     contour_records = []
-    for contour in contours:
+    for idx, contour in enumerate(contours):
+        if contour_depths is not None and contour_depths[idx] % 2 == 1:
+            continue
         area = abs(cv2.contourArea(contour)) * resolution * resolution
         if area < min_area:
             continue
@@ -204,6 +220,7 @@ def extract_boundary_polygons(
         "points_projected": int(len(indices)),
         "occupied_cells": int(np.count_nonzero(occupancy)),
         "obstacle_polygons": len(obstacle_polygons),
+        "include_internal_obstacles": include_internal_obstacles,
         "total_polygons": len(polygons),
         "total_vertices": int(sum(len(poly) for poly in polygons)),
         "obstacle_areas_m2": [round(float(area), 3) for area, _ in contour_records[:max_polygons]],
@@ -398,6 +415,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-polygons", type=int, default=80, help="Maximum obstacle polygons")
     parser.add_argument("--max-vertices", type=int, default=80, help="Maximum vertices per obstacle polygon")
     parser.add_argument("--free-point", type=float, nargs=3, metavar=("X", "Y", "Z"))
+    parser.add_argument(
+        "--include-internal-obstacles",
+        action="store_true",
+        help="Keep occupied contours nested inside a closed perimeter contour",
+    )
     parser.add_argument("--no-outer-boundary", action="store_true", help="Do not add map bounding box polygon")
     parser.add_argument("--no-preview", action="store_true", help="Skip PNG preview generation")
     parser.add_argument(
@@ -444,6 +466,7 @@ def main() -> None:
         args.max_polygons,
         args.max_vertices,
         not args.no_outer_boundary,
+        args.include_internal_obstacles,
     )
 
     free_point = tuple(args.free_point) if args.free_point else choose_free_point(

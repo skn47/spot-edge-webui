@@ -5,7 +5,7 @@
 #define RETURN0 0x00
 #define RETURN0AND1 0x10
 
-Preprocess::Preprocess() : feature_enabled(0), lidar_type(AVIA), blind(0.01), max_range(1000.0), point_filter_num(1)
+Preprocess::Preprocess() : feature_enabled(0), lidar_type(AVIA), blind(0.01), point_filter_num(1)
 {
   inf_bound = 10;
   N_SCANS = 6;
@@ -468,11 +468,16 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::UniquePtr
 
       if (i % point_filter_num == 0)
       {
-        double range_sq = added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z;
-        if (range_sq > (blind * blind) && range_sq < (max_range * max_range))
+        if (added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z > (blind * blind))
         {
-          pl_surf.points.push_back(added_pt);
-        }
+                    // Filter out points above 2.0 meters (LiDAR frame)
+                    if (added_pt.z > 2.0) continue;
+
+                    // Filter out points in the rear 30-degree cone (approx +-15 deg around 180)
+                    // 15 deg ~= 0.26 rad. PI - 0.26 = 2.88
+                    // if (std::abs(atan2(added_pt.y, added_pt.x)) > 2.88) continue;
+
+                    pl_surf.points.push_back(added_pt);        }
       }
     }
   }

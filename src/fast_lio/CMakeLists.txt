@@ -110,16 +110,24 @@ target_include_directories(fastlio_mapping PUBLIC
 target_link_libraries(fastlio_mapping ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} Eigen3::Eigen)
 target_include_directories(fastlio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})
 
+add_executable(terrain_processor src/terrain_processor.cpp)
+target_include_directories(terrain_processor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${PCL_INCLUDE_DIRS}
+)
+target_link_libraries(terrain_processor ${PCL_LIBRARIES})
+ament_target_dependencies(terrain_processor ${dependencies})
 
-add_executable(fast_lio_localization_node src/localization.cpp)
-target_include_directories(fast_lio_localization_node PUBLIC
+add_executable(localization_node src/localization.cpp)
+target_include_directories(localization_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   ${PCL_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
 )
-target_link_libraries(fast_lio_localization_node ${PCL_LIBRARIES} Eigen3::Eigen)
-ament_target_dependencies(fast_lio_localization_node ${dependencies} tf2 tf2_ros tf2_eigen tf2_geometry_msgs)
+target_link_libraries(localization_node ${PCL_LIBRARIES} Eigen3::Eigen)
+ament_target_dependencies(localization_node ${dependencies} tf2 tf2_ros tf2_eigen tf2_geometry_msgs)
 
 list(APPEND EOL_LIST "foxy" "galactic" "eloquent" "dashing" "crystal")
 
@@ -136,7 +144,7 @@ endif()
 ament_target_dependencies(fastlio_mapping ${dependencies})
 
 # ---------------- Install --------------- #
-install(TARGETS fastlio_mapping fast_lio_localization_node
+install(TARGETS fastlio_mapping terrain_processor localization_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -146,7 +154,7 @@ install(PROGRAMS
 )
 
 install(
-  DIRECTORY config rviz scripts
+  DIRECTORY config launch rviz pcd scripts
   DESTINATION share/${PROJECT_NAME}
 )
 

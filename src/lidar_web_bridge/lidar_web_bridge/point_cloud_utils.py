@@ -1,24 +1,37 @@
-import struct
-
 import numpy as np
 
 
 def parse_pointcloud2_xyz(msg) -> np.ndarray:
     """Extract (N, 3) float32 XYZ array from a sensor_msgs/PointCloud2."""
-    field_offsets = {f.name: f.byte_offset for f in msg.fields}
-    x_off = field_offsets["x"]
-    y_off = field_offsets["y"]
-    z_off = field_offsets["z"]
+    field_offsets = {f.name: f.offset for f in msg.fields}
+    try:
+        x_off = field_offsets["x"]
+        y_off = field_offsets["y"]
+        z_off = field_offsets["z"]
+    except KeyError as exc:
+        raise ValueError("PointCloud2 message must include x, y, and z fields") from exc
+
     point_step = msg.point_step
     n_points = msg.width * msg.height
+    if n_points == 0:
+        return np.empty((0, 3), dtype=np.float32)
 
-    raw = np.frombuffer(msg.data, dtype=np.uint8).reshape(n_points, point_step)
+    byte_order = ">" if msg.is_bigendian else "<"
+    dtype = np.dtype(
+        {
+            "names": ["x", "y", "z"],
+            "formats": [
+                f"{byte_order}f4",
+                f"{byte_order}f4",
+                f"{byte_order}f4",
+            ],
+            "offsets": [x_off, y_off, z_off],
+            "itemsize": point_step,
+        }
+    )
 
-    xs = np.frombuffer(raw[:, x_off : x_off + 4].tobytes(), dtype=np.float32)
-    ys = np.frombuffer(raw[:, y_off : y_off + 4].tobytes(), dtype=np.float32)
-    zs = np.frombuffer(raw[:, z_off : z_off + 4].tobytes(), dtype=np.float32)
-
-    xyz = np.stack([xs, ys, zs], axis=1)
+    points = np.frombuffer(msg.data, dtype=dtype, count=n_points)
+    xyz = np.column_stack((points["x"], points["y"], points["z"])).astype(np.float32, copy=False)
     valid = np.isfinite(xyz).all(axis=1)
     return xyz[valid]
 

@@ -277,6 +277,9 @@ private:
     }
 
     static inline void AddContourConnect(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
+        if (node_ptr1 == NULL || node_ptr2 == NULL || node_ptr1 == node_ptr2) return;
+        if ((node_ptr1->position - node_ptr2->position).norm_flat() < FARUtil::kLeafSize) return;
+
         if (!FARUtil::IsTypeInStack(node_ptr1, node_ptr2->contour_connects) &&
             !FARUtil::IsTypeInStack(node_ptr2, node_ptr1->contour_connects))
         {

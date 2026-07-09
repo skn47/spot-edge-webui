@@ -9,6 +9,7 @@ import rclpy
 from geometry_msgs.msg import Point, PoseStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from std_msgs.msg import Bool
 from visualization_msgs.msg import Marker, MarkerArray
 
 
@@ -28,39 +29,34 @@ class Route:
     loop: tuple[Waypoint, ...] = ()
     loop_forever: bool = False
 
+    @property
+    def waypoints(self) -> tuple[Waypoint, ...]:
+        return self.pre_loop + self.loop
 
-INITIAL_WAYPOINT = Waypoint("initial", 1.06585, -0.984649, 0.0, 2.71661)
-MIDPOINT_WAYPOINT = Waypoint("midpoint", 15.5887, -3.37175, 0.0, -1.58109)
-LOOP_WAYPOINTS = (
-    Waypoint("loop_1", 4.38347, 0.94021, 0.0, 0.445908),
-    Waypoint("loop_2", 12.1475, 2.7388, 0.0, -0.174207),
-    Waypoint("loop_3", 15.4377, -2.95677, 0.0, -1.61901),
-    Waypoint("loop_4", 8.70354, -5.94047, 0.0, 3.13688),
-    Waypoint("loop_5", -0.323454, -4.71842, 0.0, 1.62359),
+
+INITIAL_WAYPOINT = Waypoint("initial", 2.31596, 1.97848, 0.0, 0.00125396)
+MIDPOINT_APPROACH_WAYPOINT = Waypoint(
+    "midpoint_approach", 7.06736, 2.49701, 0.0, 0.521781
 )
+MIDPOINT_WAYPOINT = Waypoint("midpoint", 14.9858, -2.3239, 0.0, -1.56208)
+MIDPOINT_EXIT_WAYPOINT = Waypoint(
+    "midpoint_exit", 7.68595, -6.02727, 0.0, -3.11477
+)
+RETURN_WAYPOINT = Waypoint("return", -1.10975, -3.26786, 0.0, 1.61665)
 
 ROUTES = {
     "initial": Route("initial", pre_loop=(INITIAL_WAYPOINT,)),
-    "midpoint": Route("midpoint", pre_loop=(MIDPOINT_WAYPOINT,)),
-    "loop": Route("loop", loop=LOOP_WAYPOINTS, loop_forever=True),
-    "initial_loop": Route(
-        "initial_loop",
-        pre_loop=(INITIAL_WAYPOINT,),
-        loop=LOOP_WAYPOINTS,
-        loop_forever=True,
+    "midpoint": Route(
+        "midpoint",
+        pre_loop=(
+            MIDPOINT_APPROACH_WAYPOINT,
+            MIDPOINT_WAYPOINT,
+            MIDPOINT_EXIT_WAYPOINT,
+            RETURN_WAYPOINT,
+            INITIAL_WAYPOINT,
+        ),
     ),
 }
-
-
-def _normalize_angle(angle: float) -> float:
-    return math.atan2(math.sin(angle), math.cos(angle))
-
-
-def _yaw_from_quaternion(q) -> float:
-    return math.atan2(
-        2.0 * (q.w * q.z + q.x * q.y),
-        1.0 - 2.0 * (q.y * q.y + q.z * q.z),
-    )
 
 
 class RouteManager(Node):
@@ -74,10 +70,9 @@ class RouteManager(Node):
         self.declare_parameter("odom_topic", "/odometry_map")
         self.declare_parameter("goal_topic", "/goal_pose")
         self.declare_parameter("marker_topic", "/goal_markers")
+        self.declare_parameter("reach_status_topic", "/far_reach_goal_status")
         self.declare_parameter("frame_id", "map")
-        self.declare_parameter("reach_tolerance_xy", 0.75)
-        self.declare_parameter("reach_tolerance_yaw", 0.75)
-        self.declare_parameter("require_yaw_tolerance", False)
+        self.declare_parameter("reach_status_ignore_sec", 0.5)
         self.declare_parameter("goal_republish_period", 2.0)
         self.declare_parameter("start_delay_sec", 2.0)
         self.declare_parameter("loop_forever", self.route.loop_forever)
@@ -85,11 +80,10 @@ class RouteManager(Node):
         odom_topic = str(self.get_parameter("odom_topic").value)
         goal_topic = str(self.get_parameter("goal_topic").value)
         marker_topic = str(self.get_parameter("marker_topic").value)
+        reach_status_topic = str(self.get_parameter("reach_status_topic").value)
         self.frame_id = str(self.get_parameter("frame_id").value)
-        self.reach_tolerance_xy = float(self.get_parameter("reach_tolerance_xy").value)
-        self.reach_tolerance_yaw = float(self.get_parameter("reach_tolerance_yaw").value)
-        self.require_yaw_tolerance = bool(
-            self.get_parameter("require_yaw_tolerance").value
+        self.reach_status_ignore_sec = float(
+            self.get_parameter("reach_status_ignore_sec").value
         )
         self.goal_republish_period = float(
             self.get_parameter("goal_republish_period").value
@@ -97,19 +91,24 @@ class RouteManager(Node):
         self.start_delay_sec = float(self.get_parameter("start_delay_sec").value)
         self.loop_forever = bool(self.get_parameter("loop_forever").value)
 
-        self.pre_loop = list(self.route.pre_loop)
-        self.loop_points = list(self.route.loop)
-        if not self.pre_loop and not self.loop_points:
+        self.route_points = list(self.route.waypoints)
+        self.loop_start_index = len(self.route.pre_loop)
+        if not self.route_points:
             raise RuntimeError(f"Route '{self.route.name}' has no waypoints")
 
         self.goal_pub = self.create_publisher(PoseStamped, goal_topic, 10)
         self.marker_pub = self.create_publisher(MarkerArray, marker_topic, 1)
         self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
+        self.create_subscription(
+            Bool, reach_status_topic, self._reach_status_callback, 10
+        )
 
         self.current_pose = None
-        self.active_section = "pre_loop" if self.pre_loop else "loop"
         self.active_index = 0
         self.active_goal: Waypoint | None = None
+        self.far_status_armed = False
+        self.far_goal_reached = False
+        self.active_goal_start_time = None
         self.route_started = False
         self.last_publish_time = None
         self.start_time = self.get_clock().now()
@@ -119,8 +118,7 @@ class RouteManager(Node):
 
         self.get_logger().info(
             f"Route manager loaded '{self.route.name}' with "
-            f"{len(self.pre_loop)} pre-loop points and "
-            f"{len(self.loop_points)} loop points"
+            f"{len(self.route_points)} waypoints"
         )
 
     def _select_route(self, route_name: str) -> Route:
@@ -134,6 +132,21 @@ class RouteManager(Node):
     def _odom_callback(self, msg: Odometry) -> None:
         self.current_pose = msg.pose.pose
 
+    def _reach_status_callback(self, msg: Bool) -> None:
+        if self.active_goal is None:
+            return
+
+        if not msg.data:
+            self.far_status_armed = True
+            self.far_goal_reached = False
+            return
+
+        if (
+            self.far_status_armed
+            or self._active_goal_age() >= self.reach_status_ignore_sec
+        ):
+            self.far_goal_reached = True
+
     def _tick(self) -> None:
         if self.current_pose is None:
             return
@@ -144,16 +157,13 @@ class RouteManager(Node):
         self.route_started = True
 
         if self.active_goal is None:
-            self.active_goal = self._current_waypoint()
-            if self.active_goal is None:
-                return
-            self._publish_active_goal(force=True)
+            self._start_current_goal()
             return
 
-        if self._goal_reached(self.active_goal):
+        if self._active_goal_reached():
             self.get_logger().info(
                 f"Reached waypoint {self.active_goal.name} "
-                f"in section {self.active_section}"
+                f"({self.active_index + 1}/{len(self.route_points)})"
             )
             next_goal = self._advance_goal()
             if next_goal is None:
@@ -162,59 +172,51 @@ class RouteManager(Node):
                 self._publish_route_markers()
                 return
             self.active_goal = next_goal
+            self._reset_reach_status()
             self._publish_active_goal(force=True)
             self._publish_route_markers()
             return
 
         self._publish_active_goal(force=False)
 
+    def _start_current_goal(self) -> None:
+        self.active_goal = self._current_waypoint()
+        if self.active_goal is None:
+            return
+        self._reset_reach_status()
+        self._publish_active_goal(force=True)
+        self._publish_route_markers()
+
     def _current_waypoint(self) -> Waypoint | None:
-        if self.active_section == "pre_loop":
-            if self.active_index < len(self.pre_loop):
-                return self.pre_loop[self.active_index]
-            self.active_section = "loop"
-            self.active_index = 0
-
-        if self.active_section == "loop" and self.active_index < len(self.loop_points):
-            return self.loop_points[self.active_index]
-
-        return None
+        if 0 <= self.active_index < len(self.route_points):
+            return self.route_points[self.active_index]
+        return self._restart_loop_if_needed()
 
     def _advance_goal(self) -> Waypoint | None:
         self.active_index += 1
+        if self.active_index < len(self.route_points):
+            return self.route_points[self.active_index]
 
-        if self.active_section == "pre_loop":
-            if self.active_index < len(self.pre_loop):
-                return self.pre_loop[self.active_index]
-            self.active_section = "loop"
-            self.active_index = 0
-            if self.loop_points:
-                return self.loop_points[self.active_index]
+        return self._restart_loop_if_needed()
+
+    def _restart_loop_if_needed(self) -> Waypoint | None:
+        if not self.loop_forever or not self.route.loop:
             return None
+        self.active_index = self.loop_start_index
+        return self.route_points[self.active_index]
 
-        if not self.loop_points:
-            return None
+    def _active_goal_reached(self) -> bool:
+        return self.active_goal is not None and self.far_goal_reached
 
-        if self.active_index >= len(self.loop_points):
-            if not self.loop_forever:
-                return None
-            self.active_index = 0
+    def _reset_reach_status(self) -> None:
+        self.far_status_armed = False
+        self.far_goal_reached = False
+        self.active_goal_start_time = self.get_clock().now()
 
-        return self.loop_points[self.active_index]
-
-    def _goal_reached(self, waypoint: Waypoint) -> bool:
-        dx = self.current_pose.position.x - waypoint.x
-        dy = self.current_pose.position.y - waypoint.y
-        distance_xy = math.hypot(dx, dy)
-        if distance_xy > self.reach_tolerance_xy:
-            return False
-
-        if not self.require_yaw_tolerance:
-            return True
-
-        yaw_robot = _yaw_from_quaternion(self.current_pose.orientation)
-        yaw_error = abs(_normalize_angle(yaw_robot - waypoint.yaw))
-        return yaw_error <= self.reach_tolerance_yaw
+    def _active_goal_age(self) -> float:
+        if self.active_goal_start_time is None:
+            return 0.0
+        return (self.get_clock().now() - self.active_goal_start_time).nanoseconds / 1e9
 
     def _publish_active_goal(self, force: bool) -> None:
         if self.active_goal is None:
@@ -245,7 +247,7 @@ class RouteManager(Node):
         )
 
     def _all_waypoints(self) -> list[Waypoint]:
-        return self.pre_loop + self.loop_points
+        return self.route_points
 
     def _publish_route_markers(self) -> None:
         now = self.get_clock().now().to_msg()

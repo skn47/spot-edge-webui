@@ -43,7 +43,7 @@ export function LidarViewer() {
   const { positions, pointCount, connected } = useLidarStream(WS_URL);
 
   return (
-    <div style={{ width: "100vw", height: "100vh", background: "#0a0a0a" }}>
+    <div style={{ position: "absolute", inset: 0, background: "#0a0a0a" }}>
       <ConnectionBadge connected={connected} />
       <Canvas camera={{ position: [0, 5, 10], fov: 60 }}>
         <ambientLight intensity={0.5} />
