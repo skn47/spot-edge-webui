@@ -127,6 +127,14 @@ export async function uploadRoute(file: File): Promise<RouteUploadResponse> {
   return res.json() as Promise<RouteUploadResponse>;
 }
 
+export async function setDriverCredentials(
+  hostname: string,
+  username: string,
+  password: string
+): Promise<{ ok: boolean }> {
+  return post<{ ok: boolean }>("/api/driver/credentials", { hostname, username, password });
+}
+
 export async function clearRoute(): Promise<{ ok: boolean }> {
   const res = await fetch(`${BACKEND_URL}/api/route/clear`, { method: "POST" });
   if (!res.ok) throw new Error(res.statusText);

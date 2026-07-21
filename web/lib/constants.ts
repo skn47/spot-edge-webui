@@ -21,9 +21,9 @@ export const VOLTAGE_CRITICAL_THRESHOLD = 42.0;
 
 export const PROCESS_LABELS: Record<string, string> = {
   lidar_stream: "LiDAR stream",
+  spot_driver: "Spot Driver",
   sensors: "Sensors",
   localization: "Localization",
   navigation: "Navigation",
   route_manager: "Route manager",
-  rviz: "RViz2",
 };

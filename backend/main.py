@@ -16,6 +16,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSock
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
+    DriverCredentials,
     LogLine,
     MissionResponse,
     MissionStartRequest,
@@ -165,6 +166,12 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "ros_available": _ros_bridge.available}
+
+
+@app.post("/api/driver/credentials")
+async def set_driver_credentials(body: DriverCredentials):
+    _process_manager.set_driver_credentials(body.hostname, body.username, body.password)
+    return {"ok": True}
 
 
 @app.post("/api/route/upload")

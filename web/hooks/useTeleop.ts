@@ -152,6 +152,8 @@ export function useTeleop(): TeleopHook {
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         keysRef.current.add(e.key);

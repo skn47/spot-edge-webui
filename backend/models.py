@@ -4,6 +4,12 @@ from typing import Literal
 from pydantic import BaseModel, field_validator
 
 
+class DriverCredentials(BaseModel):
+    hostname: str = "192.168.80.3"
+    username: str
+    password: str
+
+
 class TeleopCmd(BaseModel):
     vx: float = 0.0
     vy: float = 0.0

@@ -9,6 +9,7 @@ import {
   missionStart,
   processAction,
   ProcessResponse,
+  setDriverCredentials,
   uploadRoute,
 } from "@/lib/api";
 import { PROCESS_LABELS } from "@/lib/constants";
@@ -90,6 +91,16 @@ const S = {
     flex: 1,
     marginLeft: 8,
   } as CSSProperties,
+  input: {
+    background: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: 4,
+    color: "#eee",
+    fontSize: 11,
+    fontFamily: "monospace",
+    padding: "3px 6px",
+    width: 130,
+  } as CSSProperties,
   flash: (msg: string | null) => ({
     fontSize: "10px",
     color: msg && msg.startsWith("Error") ? "#ff4444" : "#00ff88",
@@ -118,6 +129,11 @@ function useFlash(): [string | null, (msg: string) => void] {
 export function ControlPanel() {
   const { state } = useRobotState();
   const { connected: teleopConnected, locked: teleopLocked, velocity, enabled: teleopEnabled, setEnabled: setTeleopEnabled } = useTeleop();
+
+  const [driverHostname, setDriverHostname] = useState("192.168.80.3");
+  const [driverUsername, setDriverUsername] = useState("");
+  const [driverPassword, setDriverPassword] = useState("");
+  const [credentialsSaved, setCredentialsSaved] = useState(false);
 
   const [maps, setMaps] = useState<string[]>([]);
   const [selectedMap, setSelectedMap] = useState("microgrid");
@@ -152,6 +168,19 @@ export function ControlPanel() {
     setLoading((l) => ({ ...l, [key]: v }));
 
   const MAP_SENSITIVE = new Set(["localization", "navigation"]);
+
+  async function handleSaveCredentials() {
+    setBusy("driver-creds", true);
+    try {
+      await setDriverCredentials(driverHostname, driverUsername, driverPassword);
+      setCredentialsSaved(true);
+      setFlash("Robot credentials saved");
+    } catch (e: unknown) {
+      setFlash(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy("driver-creds", false);
+    }
+  }
 
   async function handleProcess(action: "start" | "stop" | "restart", name: string) {
     const key = `${action}-${name}`;
@@ -241,6 +270,49 @@ export function ControlPanel() {
   return (
     <div style={S.panel}>
       <div style={S.flash(flash)}>{flash}</div>
+
+      {/* ---- Robot connection ---- */}
+      <div style={S.sectionTitle}>Robot Connection</div>
+      <div style={S.row}>
+        <span style={S.label}>Host</span>
+        <input
+          style={S.input}
+          value={driverHostname}
+          onChange={e => { setDriverHostname(e.target.value); setCredentialsSaved(false); }}
+          placeholder="192.168.80.3"
+        />
+      </div>
+      <div style={S.row}>
+        <span style={S.label}>Username</span>
+        <input
+          style={S.input}
+          value={driverUsername}
+          onChange={e => { setDriverUsername(e.target.value); setCredentialsSaved(false); }}
+          placeholder="username"
+        />
+      </div>
+      <div style={S.row}>
+        <span style={S.label}>Password</span>
+        <input
+          style={S.input}
+          type="password"
+          value={driverPassword}
+          onChange={e => { setDriverPassword(e.target.value); setCredentialsSaved(false); }}
+          placeholder="password"
+        />
+      </div>
+      <div style={S.row}>
+        <span style={{ ...S.label, color: credentialsSaved ? "#00ff88" : "#555", fontSize: 10 }}>
+          {credentialsSaved ? "saved" : "not saved"}
+        </span>
+        <button
+          style={S.btnGray(busy("driver-creds") || !driverUsername || !driverPassword)}
+          disabled={busy("driver-creds") || !driverUsername || !driverPassword}
+          onClick={handleSaveCredentials}
+        >
+          {busy("driver-creds") ? "…" : "Save"}
+        </button>
+      </div>
 
       {/* ---- Process controls ---- */}
       <div style={S.sectionTitle}>Process Controls</div>

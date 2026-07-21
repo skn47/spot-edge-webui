@@ -17,13 +17,17 @@ if TYPE_CHECKING:
 
 WS_DIR = Path(__file__).parent.parent
 MAP_DIR = WS_DIR / "install" / "spot_navigation" / "share" / "spot_navigation" / "map"
-RVIZ_DIR = WS_DIR / "install" / "spot_navigation" / "share" / "spot_navigation" / "rviz"
 
-# Base commands — map paths are appended dynamically for localization/navigation.
+# Base commands — dynamic args (map paths, route file, credentials) are appended at start time.
 # Never shell=True; these are always executed as argument lists.
 _ALLOWLIST_BASE: dict[str, list[str]] = {
     "lidar_stream": [
         "ros2", "launch", "spot_navigation", "lidar_stream.launch.py",
+    ],
+    "spot_driver": [
+        "ros2", "launch", "spot_driver", "spot_driver.launch.py",
+        "odometry_frame:=lidar",
+        # hostname:=, username:=, password:= appended at start time
     ],
     "sensors": [
         "ros2", "launch", "spot_navigation", "sensors.launch.py",
@@ -40,9 +44,7 @@ _ALLOWLIST_BASE: dict[str, list[str]] = {
     ],
     "route_manager": [
         "ros2", "run", "spot_navigation", "route_manager",
-    ],
-    "rviz": [
-        "rviz2", "-d", str(RVIZ_DIR / "localization.rviz"),
+        # --ros-args -p route_file:= or route_name:=midpoint appended at start time
     ],
 }
 
@@ -58,7 +60,12 @@ def _discover_maps() -> dict[str, dict[str, Path]]:
     return catalog
 
 
-def _build_cmd(name: str, map_name: str | None = None, route_file: str | None = None) -> list[str]:
+def _build_cmd(
+    name: str,
+    map_name: str | None = None,
+    route_file: str | None = None,
+    driver_creds: dict | None = None,
+) -> list[str]:
     cmd = list(_ALLOWLIST_BASE[name])
     if map_name:
         maps = _discover_maps()[map_name]
@@ -71,6 +78,12 @@ def _build_cmd(name: str, map_name: str | None = None, route_file: str | None = 
             cmd += ["--ros-args", "-p", f"route_file:={route_file}"]
         else:
             cmd += ["--ros-args", "-p", "route_name:=midpoint"]
+    if name == "spot_driver" and driver_creds:
+        cmd += [
+            f"hostname:={driver_creds['hostname']}",
+            f"username:={driver_creds['username']}",
+            f"password:={driver_creds['password']}",
+        ]
     return cmd
 
 
@@ -113,6 +126,7 @@ class ProcessManager:
         self.log_queue: asyncio.Queue[LogLine] = asyncio.Queue()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._active_route_file: str | None = None
+        self._driver_credentials: dict | None = None
 
     def set_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -123,6 +137,9 @@ class ProcessManager:
     def clear_route_file(self) -> None:
         self._active_route_file = None
 
+    def set_driver_credentials(self, hostname: str, username: str, password: str) -> None:
+        self._driver_credentials = {"hostname": hostname, "username": username, "password": password}
+
     # ------------------------------------------------------------------
     # Public lifecycle API
     # ------------------------------------------------------------------
@@ -132,12 +149,14 @@ class ProcessManager:
             raise ValueError(f"'{name}' not in allowlist")
         if map_name is not None and map_name not in _discover_maps():
             raise ValueError(f"map '{map_name}' not found in {MAP_DIR}")
+        if name == "spot_driver" and not self._driver_credentials:
+            raise ValueError("robot credentials not set — use POST /api/driver/credentials first")
 
         record = self._records[name]
         if record.proc is not None and record.proc.poll() is None:
             raise RuntimeError(f"{name} already running")
 
-        cmd = _build_cmd(name, map_name=map_name, route_file=self._active_route_file)
+        cmd = _build_cmd(name, map_name=map_name, route_file=self._active_route_file, driver_creds=self._driver_credentials)
         proc = subprocess.Popen(
             cmd,
             env=_ROS_ENV,
