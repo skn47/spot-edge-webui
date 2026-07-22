@@ -75,8 +75,8 @@ export function useTeleop(): TeleopHook {
     if (keys.has("s") || keys.has("ArrowDown")) vx -= LINEAR_SPEED;
     if (keys.has("a")) vy += LINEAR_SPEED;
     if (keys.has("d")) vy -= LINEAR_SPEED;
-    if (keys.has("ArrowLeft")) omega += ANGULAR_SPEED;
-    if (keys.has("ArrowRight")) omega -= ANGULAR_SPEED;
+    if (keys.has("q") || keys.has("ArrowLeft")) omega += ANGULAR_SPEED;
+    if (keys.has("e") || keys.has("ArrowRight")) omega -= ANGULAR_SPEED;
     return { vx, vy, omega };
   }
 
@@ -154,7 +154,7 @@ export function useTeleop(): TeleopHook {
     const onDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      if (["w", "a", "s", "d", "q", "e", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         keysRef.current.add(e.key);
       }
