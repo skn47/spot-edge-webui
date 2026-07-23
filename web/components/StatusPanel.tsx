@@ -12,10 +12,11 @@ const S = {
     padding: "12px 14px",
     fontFamily: "monospace",
     fontSize: "12px",
-    color: "#ccc",
+    color: "#d8d8d8",
+    fontWeight: 500,
   } as CSSProperties,
   sectionTitle: {
-    color: "#555",
+    color: "#d4cfcf",
     fontSize: "10px",
     textTransform: "uppercase" as const,
     letterSpacing: "0.08em",
@@ -26,8 +27,8 @@ const S = {
     justifyContent: "space-between",
     marginBottom: "3px",
   } as CSSProperties,
-  label: { color: "#666" },
-  value: { color: "#e0e0e0" },
+  label: { color: "#999" },
+  value: { color: "#e8e8e8" },
   dot: (on: boolean) => ({
     display: "inline-block",
     width: 7,
@@ -111,7 +112,7 @@ export function StatusPanel() {
             </div>
           </>
         ) : (
-          <div style={{ color: "#444" }}>—</div>
+          <div style={{ color: "#666" }}>—</div>
         )}
       </div>
 
@@ -130,13 +131,13 @@ export function StatusPanel() {
                 <span style={S.dot(status.running)} />
                 <span style={S.label}>{PROCESS_LABELS[name] ?? name}</span>
                 {status.running && status.pid != null && (
-                  <span style={{ ...S.label, marginLeft: "auto", color: "#444", fontSize: 10 }}>
+                  <span style={{ ...S.label, marginLeft: "auto", color: "#666", fontSize: 10 }}>
                     pid {status.pid}
                   </span>
                 )}
               </div>
             ))
-          : <div style={{ color: "#444" }}>—</div>
+          : <div style={{ color: "#666" }}>—</div>
         }
       </div>
     </div>
