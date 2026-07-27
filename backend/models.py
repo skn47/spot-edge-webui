@@ -54,9 +54,17 @@ class OdometryState(BaseModel):
     yaw: float
 
 
+class VoltageState(BaseModel):
+    value: float
+    unit: str = "V"
+    timestamp: float
+    stale: bool = False
+
+
 class RobotStateMsg(BaseModel):
     timestamp: float
     odometry: OdometryState | None = None
+    voltage: VoltageState | None = None
     mission_active: bool = False
     mission_paused: bool = False
     process_statuses: dict[str, ProcessStatus] = {}

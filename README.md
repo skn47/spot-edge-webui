@@ -141,13 +141,15 @@ The browser UI provides:
 - Process start/stop controls for allowlisted ROS commands
 - Mission start, stop, pause, resume, home, and E-stop actions
 - Keyboard/gamepad teleop over `/ws/teleop`
-- Robot state over `/ws/state`, including `/odometry_map` and process status
+- Robot state over `/ws/state`, including `/odometry_map`, multimeter
+  voltage, and process status
 - Live process logs over `/ws/logs`
 - Three.js point-cloud rendering from `ws://<robot-host>:8765`
 
 The backend publishes `/cmd_vel` and `/goal_pose`, subscribes to
-`/odometry_map`, and supervises subprocesses for `lidar_stream`, `sensors`,
-`localization`, `navigation`, `route_manager`, and `rviz`.
+`/odometry_map` and `owon/value`, and supervises subprocesses for
+`lidar_stream`, `sensors`, `localization`, `navigation`, `route_manager`, and
+`rviz`.
 
 Backend API details live in `backend/README.md`.
 
@@ -188,3 +190,7 @@ ros2 bag record -a --max-bag-size 1073741824
   `python3 src/wit_ros2_imu/configure_imu.py`.
 - The web backend currently has open CORS and no authentication. Treat
   `:3000`, `:8000`, and `:8765` as trusted lab-LAN services only.
+- For UI development off the robot (no ROS 2 / hardware available), set
+  `MOCK_VOLTAGE=1` when starting the backend to generate a synthetic voltage
+  reading in place of the real `owon/value` subscription. It only activates
+  when rclpy isn't available, so it's a no-op on the robot host.

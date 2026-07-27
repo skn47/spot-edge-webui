@@ -25,9 +25,17 @@ export interface OdometryState {
   yaw: number;
 }
 
+export interface VoltageState {
+  value: number;
+  unit: string;
+  timestamp: number;
+  stale: boolean;
+}
+
 export interface RobotState {
   timestamp: number;
   odometry: OdometryState | null;
+  voltage: VoltageState | null;
   mission_active: boolean;
   mission_paused: boolean;
   process_statuses: Record<string, ProcessStatus>;

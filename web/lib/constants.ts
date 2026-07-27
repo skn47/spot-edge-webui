@@ -14,6 +14,11 @@ export const BACKEND_WS_URL =
 export const POINT_SIZE = 0.02;
 export const POINT_COLOR = "#00ff88";
 
+// Mirrors the defaults for voltage_warn_threshold / voltage_critical_threshold
+// in owon_driver's owon_node.cpp, so the badge agrees with the RViz marker color.
+export const VOLTAGE_WARN_THRESHOLD = 45.0;
+export const VOLTAGE_CRITICAL_THRESHOLD = 42.0;
+
 export const PROCESS_LABELS: Record<string, string> = {
   lidar_stream: "LiDAR stream",
   sensors: "Sensors",
