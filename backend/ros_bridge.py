@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import threading
+import time
 from typing import Any
 
 # rclpy and message types are imported lazily so the module can be imported
@@ -12,9 +13,15 @@ try:
     from geometry_msgs.msg import PoseStamped, Quaternion
     from geometry_msgs.msg import Twist, Vector3
     from nav_msgs.msg import Odometry
+    from std_msgs.msg import Float32
     _ROS_AVAILABLE = True
 except ImportError:
     _ROS_AVAILABLE = False
+
+# Multimeter has no heartbeat of its own (BLE link drops and gatttool
+# reconnects in owon_node.cpp) — treat a reading as stale once it's this old
+# so the UI doesn't keep showing a frozen last-known voltage as if it were live.
+VOLTAGE_STALE_AFTER_SEC = 5.0
 
 
 def _yaw_from_quaternion(q: Any) -> float:
@@ -36,12 +43,15 @@ class RosBridge:
         self._goal_pub = None
         self._lock = threading.Lock()
         self._latest_odom: dict | None = None
+        self._latest_voltage: dict | None = None
         self._spin_thread: threading.Thread | None = None
         self.available = _ROS_AVAILABLE
 
     def start(self) -> None:
         if not _ROS_AVAILABLE:
             print("[ros_bridge] rclpy not available — ROS bridge disabled")
+            if os.environ.get("MOCK_VOLTAGE") == "1":
+                self._start_mock_voltage()
             return
 
         os.environ.setdefault("RMW_IMPLEMENTATION", "rmw_zenoh_cpp")
@@ -53,6 +63,7 @@ class RosBridge:
         self._cmd_vel_pub = node.create_publisher(Twist, "/cmd_vel", 10)
         self._goal_pub = node.create_publisher(PoseStamped, "/goal_pose", 10)
         node.create_subscription(Odometry, "/odometry_map", self._odom_cb, 10)
+        node.create_subscription(Float32, "owon/value", self._voltage_cb, 10)
 
         self._spin_thread = threading.Thread(
             target=rclpy.spin,
@@ -101,6 +112,41 @@ class RosBridge:
     def get_state(self) -> dict | None:
         with self._lock:
             return dict(self._latest_odom) if self._latest_odom else None
+
+    def get_voltage(self) -> dict | None:
+        with self._lock:
+            reading = dict(self._latest_voltage) if self._latest_voltage else None
+        if reading is None:
+            return None
+        reading["stale"] = (time.time() - reading["timestamp"]) > VOLTAGE_STALE_AFTER_SEC
+        return reading
+
+    def _voltage_cb(self, msg: Any) -> None:
+        with self._lock:
+            self._latest_voltage = {
+                "value": msg.data,
+                "unit": "V",
+                "timestamp": time.time(),
+            }
+
+    def _start_mock_voltage(self) -> None:
+        """Dev-only stand-in for the owon/value topic when rclpy/hardware isn't
+        present (e.g. developing on a laptop instead of the robot's onboard
+        compute). Enabled via MOCK_VOLTAGE=1; never runs when ROS is available."""
+        import random
+
+        def _loop() -> None:
+            while True:
+                with self._lock:
+                    self._latest_voltage = {
+                        "value": round(random.uniform(40.0, 48.0), 2),
+                        "unit": "V",
+                        "timestamp": time.time(),
+                    }
+                time.sleep(1.0)
+
+        threading.Thread(target=_loop, daemon=True).start()
+        print("[ros_bridge] MOCK_VOLTAGE=1 — publishing synthetic voltage readings for local UI testing")
 
     def _odom_cb(self, msg: Any) -> None:
         pos = msg.pose.pose.position

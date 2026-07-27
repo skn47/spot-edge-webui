@@ -3,12 +3,14 @@ import { StatusPanel } from "@/components/StatusPanel";
 import { ControlPanel } from "@/components/ControlPanel";
 import { DiagnosticPanel } from "@/components/DiagnosticPanel";
 import { LogPanel } from "@/components/LogPanel";
+import { VoltageBadge } from "@/components/VoltageBadge";
 
 export default function Home() {
   return (
     <div style={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden" }}>
       <div style={{ flex: 1, position: "relative", minWidth: 0, overflow: "hidden" }}>
         <LidarViewer />
+        <VoltageBadge />
       </div>
       <div
         style={{
