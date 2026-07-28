@@ -33,6 +33,7 @@ from diagnostic import run_diagnostic
 ROUTE_DIR = Path(__file__).parent / "routes"
 ACTIVE_ROUTE_PATH = ROUTE_DIR / "active_route.json"
 from process_manager import ProcessManager
+from recorder import MissionRecorder
 from ros_bridge import RosBridge
 
 # ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ from ros_bridge import RosBridge
 
 _process_manager = ProcessManager()
 _ros_bridge = RosBridge()
+_recorder = MissionRecorder(_ros_bridge)
 
 # Mission state — user-intent flags only. `mission_active` is derived from
 # the actual process statuses inside _state_broadcaster; do not store it here.
@@ -314,6 +316,7 @@ async def mission_start(body: MissionStartRequest) -> MissionResponse:
         pass
 
     _mission_paused = False
+    _recorder.start()
     return MissionResponse(ok=True, action="start", message=f"mission started with map '{body.map_name}'")
 
 
@@ -325,6 +328,7 @@ async def mission_stop() -> MissionResponse:
     _process_manager.stop("navigation")
     _process_manager.stop("localization")
     _mission_paused = False
+    _recorder.stop()
     return MissionResponse(ok=True, action="stop", message="mission stopped")
 
 
@@ -380,6 +384,7 @@ async def mission_estop() -> MissionResponse:
     _process_manager.stop("localization")
 
     _mission_paused = False
+    _recorder.stop()
     return MissionResponse(ok=True, action="estop", message="E-stop: velocity zeroed, mission stack stopped")
 
 
