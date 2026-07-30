@@ -13,6 +13,8 @@ try:
     from geometry_msgs.msg import PoseStamped, Quaternion
     from geometry_msgs.msg import Twist, Vector3
     from nav_msgs.msg import Odometry
+    from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from sensor_msgs.msg import CompressedImage
     from std_msgs.msg import Float32
     _ROS_AVAILABLE = True
 except ImportError:
@@ -44,6 +46,8 @@ class RosBridge:
         self._lock = threading.Lock()
         self._latest_odom: dict | None = None
         self._latest_voltage: dict | None = None
+        self._latest_frame: bytes | None = None
+        self._frame_seq: int = 0
         self._spin_thread: threading.Thread | None = None
         self.available = _ROS_AVAILABLE
 
@@ -64,6 +68,19 @@ class RosBridge:
         self._goal_pub = node.create_publisher(PoseStamped, "/goal_pose", 10)
         node.create_subscription(Odometry, "/odometry_map", self._odom_cb, 10)
         node.create_subscription(Float32, "owon/value", self._voltage_cb, 10)
+
+        _camera_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+        node.create_subscription(
+            CompressedImage,
+            "camera/frontleft_fisheye/image/compressed",
+            self._camera_cb,
+            _camera_qos,
+        )
 
         self._spin_thread = threading.Thread(
             target=rclpy.spin,
@@ -128,6 +145,18 @@ class RosBridge:
                 "unit": "V",
                 "timestamp": time.time(),
             }
+
+    def _camera_cb(self, msg: Any) -> None:
+        data = bytes(msg.data)
+        with self._lock:
+            self._latest_frame = data
+            self._frame_seq += 1
+
+    def get_latest_frame(self) -> tuple[int, bytes] | None:
+        with self._lock:
+            if self._latest_frame is None:
+                return None
+            return (self._frame_seq, self._latest_frame)
 
     def _start_mock_voltage(self) -> None:
         """Dev-only stand-in for the owon/value topic when rclpy/hardware isn't

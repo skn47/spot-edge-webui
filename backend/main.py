@@ -54,6 +54,7 @@ _MISSION_CORE_PROCESSES = ("localization", "navigation")
 # Connected WebSocket client sets
 _state_clients: set[WebSocket] = set()
 _log_clients: set[WebSocket] = set()
+_camera_clients: set[WebSocket] = set()
 
 # Teleop exclusivity
 _teleop_lock = asyncio.Lock()
@@ -73,11 +74,13 @@ async def lifespan(app: FastAPI):
 
     state_task = asyncio.create_task(_state_broadcaster())
     log_task = asyncio.create_task(_log_broadcaster())
+    camera_task = asyncio.create_task(_camera_broadcaster())
 
     yield
 
     state_task.cancel()
     log_task.cancel()
+    camera_task.cancel()
     _ros_bridge.stop()
 
 
@@ -137,6 +140,29 @@ async def _state_broadcaster() -> None:
                 dead.append(ws)
         for ws in dead:
             _state_clients.discard(ws)
+
+
+async def _camera_broadcaster() -> None:
+    last_seq = 0
+    while True:
+        await asyncio.sleep(0.1)
+        if not _camera_clients:
+            continue
+        frame = _ros_bridge.get_latest_frame()
+        if frame is None:
+            continue
+        seq, data = frame
+        if seq == last_seq:
+            continue
+        last_seq = seq
+        dead: list[WebSocket] = []
+        for ws in list(_camera_clients):
+            try:
+                await ws.send_bytes(data)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            _camera_clients.discard(ws)
 
 
 async def _log_broadcaster() -> None:
@@ -472,5 +498,18 @@ async def ws_state(ws: WebSocket) -> None:
         pass
     finally:
         _state_clients.discard(ws)
+
+
+@app.websocket("/ws/camera/frontleft")
+async def ws_camera_frontleft(ws: WebSocket) -> None:
+    await ws.accept()
+    _camera_clients.add(ws)
+    try:
+        while True:
+            await ws.receive_text()  # keep connection alive; we only push
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _camera_clients.discard(ws)
 
 
