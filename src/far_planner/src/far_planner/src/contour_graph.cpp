@@ -581,9 +581,6 @@ bool ContourGraph::ReprojectPointOutsidePolygons(Point3D& point, const float& fr
 }
 
 void ContourGraph::AddContourToSets(const NavNodePtr& node_ptr1, const NavNodePtr& node_ptr2) {
-    if (node_ptr1 == NULL || node_ptr2 == NULL || node_ptr1 == node_ptr2) return;
-    if ((node_ptr1->position - node_ptr2->position).norm_flat() < FARUtil::kLeafSize) return;
-
     NavEdge edge(node_ptr1, node_ptr2);
     // force to form pair id1 < id2
     if (node_ptr1->id > node_ptr2->id) edge = NavEdge(node_ptr2, node_ptr1);
@@ -731,4 +728,5 @@ void ContourGraph::ResetCurrentContour() {
     odom_node_ptr_ = NULL;
     is_robot_inside_poly_ = false;
 }   
+
 
