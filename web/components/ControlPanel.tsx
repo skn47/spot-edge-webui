@@ -368,7 +368,7 @@ export function ControlPanel() {
           <input
             ref={routeInputRef}
             type="file"
-            accept=".json"
+            accept=".json,.yaml,.yml"
             style={{ display: "none" }}
             onChange={handleRouteUpload}
           />

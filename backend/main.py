@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import sys
 import time
+import yaml
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -202,13 +204,47 @@ async def set_driver_credentials(body: DriverCredentials):
     return {"ok": True}
 
 
+def _convert_yaml_mission(data: dict) -> dict:
+    def _yaw(orient: dict) -> float:
+        return 2.0 * math.atan2(float(orient["z"]), float(orient["w"]))
+
+    ip = data["initial_pose"]
+    return {
+        "initial_pose": {
+            "x": float(ip["position"]["x"]),
+            "y": float(ip["position"]["y"]),
+            "yaw": _yaw(ip["orientation"]),
+        },
+        "goals": [
+            {
+                "name": f"goal_{i + 1}",
+                "x": float(wp["position"]["x"]),
+                "y": float(wp["position"]["y"]),
+                "yaw": _yaw(wp["orientation"]),
+            }
+            for i, wp in enumerate(data["waypoints"])
+        ],
+    }
+
+
 @app.post("/api/route/upload")
 async def route_upload(file: UploadFile = File(...)):
     content = await file.read()
-    try:
-        data = json.loads(content)
-    except (json.JSONDecodeError, ValueError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+    filename = file.filename or ""
+    if filename.lower().endswith((".yaml", ".yml")):
+        try:
+            raw = yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid YAML: {e}")
+        try:
+            data = _convert_yaml_mission(raw)
+        except (KeyError, TypeError, ValueError) as e:
+            raise HTTPException(status_code=400, detail=f"YAML schema error: {e}")
+    else:
+        try:
+            data = json.loads(content)
+        except (json.JSONDecodeError, ValueError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
 
     goals = data.get("goals")
     if not isinstance(goals, list) or len(goals) == 0:
@@ -239,7 +275,7 @@ async def route_upload(file: UploadFile = File(...)):
                 raise HTTPException(status_code=400, detail=f"initial_pose.{field} must be a number")
 
     ROUTE_DIR.mkdir(parents=True, exist_ok=True)
-    ACTIVE_ROUTE_PATH.write_bytes(content)
+    ACTIVE_ROUTE_PATH.write_bytes(json.dumps(data).encode())
     _process_manager.set_route_file(str(ACTIVE_ROUTE_PATH))
     return {"ok": True, "filename": file.filename, "goal_count": len(goals)}
 
