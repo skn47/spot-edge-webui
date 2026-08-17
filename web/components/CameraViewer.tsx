@@ -86,7 +86,7 @@ export function CameraViewer() {
           height: "100%",
           objectFit: "contain",
           display: "block",
-          transform: "rotate(-90deg)",
+          transform: "rotate(90deg)",
           transformOrigin: "center"
         }}
       />

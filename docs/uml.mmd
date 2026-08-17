@@ -1,3 +1,4 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryTextColor": "#000000", "secondaryTextColor": "#000000", "tertiaryTextColor": "#000000", "textColor": "#000000", "lineColor": "#000000", "edgeLabelBackground": "#ffffff", "clusterBkg": "#ffffff", "clusterBorder": "#000000"}}}%%
 flowchart LR
     operator([Operator])
     spot([Spot])
@@ -63,10 +64,10 @@ flowchart LR
     rosRelay -- "/cmd_vel, /goal_pose" --> rosTopics
     rosTopics -- "/odometry_map" --> rosRelay
 
-    classDef boundary fill:#424242,stroke:#999,color:#eee
-    classDef component fill:#1f1f1f,stroke:#aaa,color:#ddd
-    classDef interface fill:#5a5a5a,stroke:#666,color:#eee
-    classDef actor fill:#2b2b2b,stroke:#bbb,color:#eee
+    classDef boundary fill:#bdbdbd,stroke:#666,color:#000
+    classDef component fill:#e0e0e0,stroke:#555,color:#000
+    classDef interface fill:#a5a5a5,stroke:#999,color:#000
+    classDef actor fill:#d4d4d4,stroke:#444,color:#000
 
     class browser,backend,ros boundary
     class controls,viewer,api,rosRelay,supervisor,stateBroadcaster,logBroadcaster,sensors,localization,navigation,lidarNode component
